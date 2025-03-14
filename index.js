@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits } = require("discord.js");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const cron = require("node-cron"); // Para agendar tarefas
+const http = require("http"); // Adicionado para o servidor HTTP
 require("dotenv").config();
 
 const client = new Client({
@@ -82,6 +82,7 @@ client.once("ready", () => {
   };
 
   // Agendar verificações às 10:00 e 14:00
+  const cron = require("node-cron");
   cron.schedule("0 10 * * *", checkPatchNotes, {
     timezone: "America/Sao_Paulo", // Defina o fuso horário correto
   });
@@ -92,6 +93,17 @@ client.once("ready", () => {
 
   // Manter o bot ativo a cada 10 minutos
   setInterval(keepAlive, 10 * 60 * 1000); // 10 minutos
+});
+
+// Servidor HTTP fictício
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Bot está online!\n");
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Servidor HTTP ouvindo na porta ${PORT}`);
 });
 
 client.login(process.env.BOT_TOKEN);
