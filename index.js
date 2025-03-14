@@ -1,84 +1,97 @@
-const {
-  Client,
-  GatewayIntentBits,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-} = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const cron = require("node-cron"); // Para agendar tarefas
 require("dotenv").config();
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent, // Necessário para ler o conteúdo das mensagens
+  ],
 });
 
 const PATCH_NOTES_URL =
   "https://www.leagueoflegends.com/pt-br/news/game-updates/";
 let lastPatchNotes = "";
 
+// Função para buscar os patch notes
 async function fetchPatchNotes() {
   try {
     const { data } = await axios.get(PATCH_NOTES_URL);
     const $ = cheerio.load(data);
-
-    // Extrair o link do patch mais recente
     const latestPatch = $('a[href*="/patch-"]').first().attr("href");
     const fullUrl = `https://www.leagueoflegends.com${latestPatch}`;
 
     if (fullUrl !== lastPatchNotes) {
       lastPatchNotes = fullUrl;
-
-      // Extrair a imagem de destaque
-      const patchPageResponse = await axios.get(fullUrl);
-      const patchPage = cheerio.load(patchPageResponse.data);
-      const imageUrl = patchPage(".skins.cboxElement img").attr("src"); // Busca a imagem dentro da classe
-
-      return {
-        url: fullUrl,
-        image: imageUrl,
-      };
+      return fullUrl;
     }
     return null;
   } catch (error) {
-    console.error("Error fetching patch notes:", error);
+    console.error("Erro ao buscar os patch notes:", error);
     return null;
   }
 }
 
+// Função para manter o bot ativo
+async function keepAlive() {
+  try {
+    // Faz uma solicitação HTTP fictícia
+    await axios.get("https://www.google.com"); // Qualquer URL válida
+    console.log("Bot mantido ativo com sucesso!");
+  } catch (error) {
+    console.error("Erro ao manter o bot ativo:", error);
+  }
+}
+
+// Comando !patch
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return; // Ignorar mensagens de outros bots
+
+  // Comando !patch
+  if (message.content === "!patch") {
+    try {
+      const patchNotesUrl = await fetchPatchNotes();
+      if (patchNotesUrl) {
+        message.reply(`Novos patch notes disponíveis: ${patchNotesUrl}`);
+      } else {
+        message.reply("Nenhum novo patch encontrado.");
+      }
+    } catch (error) {
+      console.error("Erro ao consultar os patch notes:", error);
+      message.reply("Ocorreu um erro ao consultar os patch notes.");
+    }
+  }
+});
+
+// Verificar os patch notes automaticamente às 10:00 e 14:00
 client.once("ready", () => {
   console.log(`Logged in as ${client.user.tag}`);
-  setInterval(async () => {
-    const patchNotes = await fetchPatchNotes();
-    if (patchNotes) {
+
+  // Função para verificar os patch notes
+  const checkPatchNotes = async () => {
+    const patchNotesUrl = await fetchPatchNotes();
+    if (patchNotesUrl) {
       const channel = client.channels.cache.get(process.env.CHANNEL_ID);
       if (channel) {
-        const embed = {
-          title: "🎮 Novos Patch Notes!",
-          description: `Confira as últimas atualizações do League of Legends: [Clique aqui](${patchNotes.url})`,
-          color: 0x0099ff,
-          image: {
-            url: patchNotes.image, // Usando a imagem de destaque
-          },
-          footer: {
-            text: "Patch Notes Bot",
-          },
-        };
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setLabel("Ver Patch Notes")
-            .setURL(patchNotes.url)
-            .setStyle(ButtonStyle.Link)
-        );
-
-        channel.send({
-          embeds: [embed],
-          components: [row],
-        });
+        channel.send(`Novos patch notes disponíveis: ${patchNotesUrl}`);
       }
     }
-  }, 60000); // Verifica a cada 1 minuto
+  };
+
+  // Agendar verificações às 10:00 e 14:00
+  cron.schedule("0 10 * * *", checkPatchNotes, {
+    timezone: "America/Sao_Paulo", // Defina o fuso horário correto
+  });
+
+  cron.schedule("0 14 * * *", checkPatchNotes, {
+    timezone: "America/Sao_Paulo", // Defina o fuso horário correto
+  });
+
+  // Manter o bot ativo a cada 10 minutos
+  setInterval(keepAlive, 10 * 60 * 1000); // 10 minutos
 });
 
 client.login(process.env.BOT_TOKEN);
