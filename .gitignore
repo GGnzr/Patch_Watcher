@@ -1,0 +1,23 @@
+# Ignorar node_modules (dependências do projeto)
+node_modules/
+
+# Ignorar arquivos de ambiente (sensíveis)
+.env
+
+# Ignorar logs
+*.log
+
+# Ignorar arquivos de configuração local
+*.local
+
+# Ignorar arquivos de IDE/Editor
+.vscode/
+.idea/
+
+# Ignorar arquivos de build/dist
+dist/
+build/
+
+# Ignorar arquivos do sistema operacional
+.DS_Store
+Thumbs.db
