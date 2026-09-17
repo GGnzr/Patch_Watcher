@@ -115,6 +115,7 @@ const client = new Client({
 // =====================================================
 
 
+
 async function fetchPatchNotes() {
   try {
     addLog(
@@ -139,104 +140,133 @@ async function fetchPatchNotes() {
     let imageUrl = null;
     let title = null;
 
-    // Procura o primeiro card/link de patch
-    const patchCard = $('a[href*="league-of-legends-patch-"]').first();
+    // Procura o card do patch
+    let patchCard = $('a[href*="league-of-legends-patch-"]').first();
 
-    if (patchCard.length) {
-      patchLink = patchCard.attr("href");
-
-      // Tenta pegar a imagem existente dentro do próprio card
-      const image = patchCard.find("img").first();
-
-      if (image.length) {
-        imageUrl =
-          image.attr("src") ||
-          image.attr("data-src") ||
-          image.attr("data-lazy-src") ||
-          null;
-
-        // Se não encontrou no src, tenta srcset
-        if (!imageUrl) {
-          const srcset = image.attr("srcset");
-
-          if (srcset) {
-            imageUrl = srcset
-              .split(",")[0]
-              .trim()
-              .split(" ")[0];
-          }
-        }
-      }
-
-      // Título do próprio card
-      title =
-        image.attr("alt") ||
-        patchCard.find("h2, h3").first().text() ||
-        patchCard.text();
+    if (!patchCard.length) {
+      patchCard = $('a[href*="patch-"]').first();
     }
 
-    // Fallback caso o seletor principal não encontre
-    if (!patchLink) {
-      const fallbackPatch =
-        $('a[href*="patch-"]').first();
-
-      if (fallbackPatch.length) {
-        patchLink = fallbackPatch.attr("href");
-
-        const image = fallbackPatch.find("img").first();
-
-        if (image.length) {
-          imageUrl =
-            image.attr("src") ||
-            image.attr("data-src") ||
-            image.attr("data-lazy-src") ||
-            null;
-
-          if (!imageUrl) {
-            const srcset = image.attr("srcset");
-
-            if (srcset) {
-              imageUrl = srcset
-                .split(",")[0]
-                .trim()
-                .split(" ")[0];
-            }
-          }
-        }
-
-        title =
-          image?.attr("alt") ||
-          fallbackPatch.find("h2, h3").first().text() ||
-          fallbackPatch.text();
-      }
-    }
-
-    if (!patchLink) {
+    if (!patchCard.length) {
       throw new Error(
-        "Não foi encontrado nenhum link de patch na página da Riot."
+        "Não foi encontrado nenhum card de patch na página da Riot."
       );
     }
 
-    // Corrige URL relativa
-    if (patchLink.startsWith("/")) {
-      patchLink =
-        "https://www.leagueoflegends.com" +
-        patchLink;
+    patchLink = patchCard.attr("href");
+
+    // ---------------------------------------------------------
+    // PROCURA A IMAGEM REAL DO CARD
+    // ---------------------------------------------------------
+
+    const images = patchCard.find("img");
+
+    images.each((index, element) => {
+      if (imageUrl) {
+        return;
+      }
+
+      const img = $(element);
+
+      const attributes = [
+        "src",
+        "srcset",
+        "data-src",
+        "data-srcset",
+        "data-lazy-src",
+        "data-lazy",
+        "data-original"
+      ];
+
+      for (const attribute of attributes) {
+        const value = img.attr(attribute);
+
+        if (!value) {
+          continue;
+        }
+
+        // Ignora placeholders SVG/base64
+        if (
+          value.startsWith("data:image") ||
+          value.includes("<svg")
+        ) {
+          continue;
+        }
+
+        // Procura diretamente uma URL da Riot
+        if (
+          value.includes("cmsassets.rgpub.io") ||
+          value.includes("rgpub.io")
+        ) {
+          // Caso seja srcset
+          const urls = value
+            .split(",")
+            .map((item) => item.trim().split(" ")[0])
+            .filter(Boolean);
+
+          const riotUrl = urls.find(
+            (url) =>
+              url.includes("cmsassets.rgpub.io") ||
+              url.includes("rgpub.io")
+          );
+
+          if (riotUrl) {
+            imageUrl = riotUrl;
+            break;
+          }
+        }
+
+        // Caso seja uma URL normal
+        if (
+          value.startsWith("https://") ||
+          value.startsWith("http://") ||
+          value.startsWith("//") ||
+          value.startsWith("/")
+        ) {
+          const urls = value
+            .split(",")
+            .map((item) => item.trim().split(" ")[0])
+            .filter(Boolean);
+
+          const validUrl = urls.find(
+            (url) =>
+              !url.startsWith("data:image") &&
+              !url.includes("<svg")
+          );
+
+          if (validUrl) {
+            imageUrl = validUrl;
+            break;
+          }
+        }
+      }
+    });
+
+    // ---------------------------------------------------------
+    // PROCURA NO HTML DO CARD
+    // ---------------------------------------------------------
+
+    if (!imageUrl) {
+      const cardHtml = patchCard.toString();
+
+      const cmsMatch = cardHtml.match(
+        /https?:\/\/cmsassets\.rgpub\.io\/[^"'\\\s<>]+/i
+      );
+
+      if (cmsMatch) {
+        imageUrl = cmsMatch[0];
+      }
     }
 
-    // Corrige URL relativa da imagem
-    if (imageUrl && imageUrl.startsWith("/")) {
-      imageUrl =
-        "https://www.leagueoflegends.com" +
-        imageUrl;
-    }
+    // ---------------------------------------------------------
+    // TÍTULO
+    // ---------------------------------------------------------
 
-    // Caso a imagem venha com URL protocol-relative
-    if (imageUrl && imageUrl.startsWith("//")) {
-      imageUrl = "https:" + imageUrl;
-    }
+    title =
+      patchCard.find("h1, h2, h3, h4").first().text() ||
+      patchCard.find("img").first().attr("alt") ||
+      null;
 
-    // Se ainda não encontrou título, tenta metadados
     if (!title || !title.trim()) {
       title =
         $('meta[property="og:title"]').attr("content") ||
@@ -248,6 +278,38 @@ async function fetchPatchNotes() {
       .replace(/\s+/g, " ")
       .trim();
 
+    // ---------------------------------------------------------
+    // CORRIGE URL DO PATCH
+    // ---------------------------------------------------------
+
+    if (patchLink.startsWith("/")) {
+      patchLink =
+        "https://www.leagueoflegends.com" +
+        patchLink;
+    }
+
+    // ---------------------------------------------------------
+    // CORRIGE URL DA IMAGEM
+    // ---------------------------------------------------------
+
+    if (imageUrl) {
+      imageUrl = imageUrl.trim();
+
+      if (imageUrl.startsWith("//")) {
+        imageUrl = "https:" + imageUrl;
+      }
+
+      if (imageUrl.startsWith("/")) {
+        imageUrl =
+          "https://www.leagueoflegends.com" +
+          imageUrl;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // LOGS
+    // ---------------------------------------------------------
+
     addLog(
       "INFO",
       `Patch encontrado: ${patchLink}`
@@ -256,12 +318,12 @@ async function fetchPatchNotes() {
     if (imageUrl) {
       addLog(
         "SUCCESS",
-        `Imagem do card encontrada: ${imageUrl}`
+        `Imagem real encontrada: ${imageUrl}`
       );
     } else {
       addLog(
         "WARN",
-        "Não foi encontrada imagem no card do patch."
+        "Não foi possível encontrar a imagem real do patch."
       );
     }
 
@@ -278,69 +340,6 @@ async function fetchPatchNotes() {
     );
 
     throw error;
-  }
-}
-
-// =====================================================
-// ENVIAR PATCH PARA DISCORD
-// =====================================================
-
-async function sendPatchToDiscord(patch) {
-  try {
-    if (!config.channelId) {
-      addLog(
-        "WARN",
-        "Nenhum canal configurado para envio."
-      );
-
-      return false;
-    }
-
-    const channel = await client.channels.fetch(
-      config.channelId
-    );
-
-    if (!channel) {
-      throw new Error("Canal não encontrado.");
-    }
-
-    const embed = new EmbedBuilder()
-      .setTitle(patch.title)
-      .setURL(patch.url)
-      .setDescription(
-        "📢 Novas notas de atualização do League of Legends!"
-      )
-      .setTimestamp();
-
-    if (patch.image) {
-      embed.setImage(patch.image);
-    }
-
-    const button = new ButtonBuilder()
-      .setLabel("Ver notas do patch")
-      .setURL(patch.url)
-      .setStyle(ButtonStyle.Link);
-
-    const row = new ActionRowBuilder().addComponents(button);
-
-    await channel.send({
-      embeds: [embed],
-      components: [row]
-    });
-
-    addLog(
-      "SUCCESS",
-      `Patch enviado para o canal ${channel.name}.`
-    );
-
-    return true;
-  } catch (error) {
-    addLog(
-      "ERROR",
-      `Erro ao enviar patch para Discord: ${error.message}`
-    );
-
-    return false;
   }
 }
 
