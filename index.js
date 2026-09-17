@@ -585,6 +585,7 @@ client.once(
   }
 );
 
+
 // =====================================================
 // INTERAÇÃO /PATCH
 // =====================================================
@@ -607,68 +608,47 @@ client.on(
 
     await interaction.deferReply();
 
-    const result =
-      await checkPatch(true);
+    try {
+      const result =
+        await checkPatch(true);
 
-    if (!result.success) {
+      if (!result.success) {
+        await interaction.editReply(
+          `❌ Erro ao consultar o patch: ${result.error}`
+        );
+
+        return;
+      }
+
+      const patch =
+        result.patch;
+
+      // O checkPatch(true) já enviou o patch
+      // para o canal configurado.
+      await interaction.editReply({
+        content:
+          `✅ Patch **${patch.title}** enviado para o canal configurado.`
+      });
+
+      addLog(
+        "SUCCESS",
+        `/patch executado por ${interaction.user.tag}.`
+      );
+
+    } catch (error) {
+      addLog(
+        "ERROR",
+        `Erro no comando /patch: ${error.message}`
+      );
+
       await interaction.editReply(
-        `❌ Erro ao consultar o patch: ${result.error}`
-      );
-
-      return;
-    }
-
-    const patch =
-      result.patch;
-
-    const embed =
-      new EmbedBuilder()
-        .setTitle(
-          patch.title
-        )
-        .setURL(
-          patch.url
-        )
-        .setDescription(
-          "📰 Notas de atualização do League of Legends"
-        )
-        .setTimestamp();
-
-    if (patch.image) {
-      embed.setImage(
-        patch.image
+        `❌ Erro ao executar /patch: ${error.message}`
       );
     }
-
-    const button =
-      new ButtonBuilder()
-        .setLabel(
-          "Ver notas do patch"
-        )
-        .setURL(
-          patch.url
-        )
-        .setStyle(
-          ButtonStyle.Link
-        );
-
-    const row =
-      new ActionRowBuilder()
-        .addComponents(
-          button
-        );
-
-    await interaction.editReply({
-      embeds: [embed],
-      components: [row]
-    });
-
-    addLog(
-      "SUCCESS",
-      `/patch executado por ${interaction.user.tag}.`
-    );
   }
 );
+
+
 
 // =====================================================
 // PAINEL WEB
