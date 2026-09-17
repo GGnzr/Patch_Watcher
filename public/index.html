@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>Patch Watcher</title>
 
   <style>
@@ -28,6 +29,10 @@
       margin: 0 0 6px;
     }
 
+    h2 {
+      margin-top: 0;
+    }
+
     .subtitle {
       color: #9ca3af;
       margin-bottom: 24px;
@@ -50,11 +55,14 @@
       grid-column: 1 / -1;
     }
 
+    /* STATUS */
+
     .status {
       display: flex;
       align-items: center;
       gap: 10px;
       font-size: 20px;
+      margin-bottom: 16px;
     }
 
     .dot {
@@ -67,6 +75,8 @@
     .online {
       background: #35c759;
     }
+
+    /* FORM */
 
     label {
       display: block;
@@ -96,6 +106,10 @@
       font-weight: bold;
     }
 
+    button:hover {
+      opacity: 0.9;
+    }
+
     button.secondary {
       background: #303542;
     }
@@ -103,6 +117,8 @@
     button.danger {
       background: #8e3540;
     }
+
+    /* HORÁRIOS */
 
     .schedule-row {
       display: flex;
@@ -113,6 +129,56 @@
     .schedule-row input {
       flex: 1;
     }
+
+    /* CHECKBOX */
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* SERVIDOR */
+
+    .server-box {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 10px;
+      background: #10131a;
+      border: 1px solid #292e3a;
+    }
+
+    .server-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .server-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #303542;
+    }
+
+    .server-name {
+      font-size: 17px;
+      font-weight: bold;
+    }
+
+    .server-id {
+      color: #8d94a3;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    /* LOGS */
 
     .log {
       height: 360px;
@@ -149,45 +215,7 @@
       color: #8d94a3;
     }
 
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .row input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-    }
-
-    .server-option {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 10px;
-      background: #10131a;
-      border: 1px solid #292e3a;
-    }
-
-    .server-icon {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      object-fit: cover;
-      background: #303542;
-    }
-
-    .server-name {
-      font-weight: bold;
-    }
-
-    .server-id {
-      color: #8d94a3;
-      font-size: 12px;
-      margin-top: 3px;
-    }
+    /* RESPONSIVO */
 
     @media (max-width: 750px) {
       .grid {
@@ -215,14 +243,22 @@
   <div class="grid">
 
 ```
+<!-- ================================================= -->
 <!-- STATUS -->
+<!-- ================================================= -->
+
 <section class="card">
 
-  <h2>Status</h2>
+  <h2>📊 Status</h2>
 
   <div class="status">
+
     <span id="dot" class="dot"></span>
-    <span id="statusText">Carregando...</span>
+
+    <span id="statusText">
+      Carregando...
+    </span>
+
   </div>
 
   <p>
@@ -239,14 +275,20 @@
     Último patch registrado:
   </p>
 
-  <div id="lastPatch" class="muted">
+  <div
+    id="lastPatch"
+    class="muted"
+  >
     -
   </div>
 
 </section>
 
 
-<!-- SERVIDORES -->
+<!-- ================================================= -->
+<!-- SERVIDOR -->
+<!-- ================================================= -->
+
 <section class="card">
 
   <h2>🌐 Servidor</h2>
@@ -256,22 +298,32 @@
   </label>
 
   <select id="guildSelect">
+
     <option value="">
       Carregando servidores...
     </option>
+
   </select>
 
-  <div id="selectedGuild" class="muted" style="margin-top: 12px;">
-    Nenhum servidor selecionado.
+  <div id="guildInfo">
+
+    <div class="muted">
+      Nenhum servidor selecionado.
+    </div>
+
   </div>
 
 </section>
 
 
+<!-- ================================================= -->
 <!-- CONFIGURAÇÕES -->
+<!-- ================================================= -->
+
 <section class="card">
 
   <h2>⚙️ Configurações</h2>
+
 
   <label>
     Canal do Discord (ID)
@@ -283,11 +335,13 @@
     placeholder="Ex.: 123456789012345678"
   >
 
+
   <label>
     Horários de verificação
   </label>
 
   <div id="schedules"></div>
+
 
   <button
     class="secondary"
@@ -295,6 +349,7 @@
   >
     + Adicionar horário
   </button>
+
 
   <label class="row">
 
@@ -307,9 +362,11 @@
 
   </label>
 
+
   <button onclick="saveConfig()">
     💾 Salvar configurações
   </button>
+
 
   <button
     class="secondary"
@@ -321,27 +378,54 @@
 </section>
 
 
-<!-- SERVIDOR DETALHADO -->
+<!-- ================================================= -->
+<!-- CANAL / INFORMAÇÕES -->
+<!-- ================================================= -->
+
 <section class="card">
 
-  <h2>📡 Servidor conectado</h2>
+  <h2>📡 Informações</h2>
 
-  <div id="guildInfo">
-    <span class="muted">
-      Carregando...
-    </span>
+  <p>
+    Servidor selecionado:
+  </p>
+
+  <div
+    id="selectedGuild"
+    class="muted"
+  >
+    Nenhum servidor selecionado.
+  </div>
+
+  <p>
+    Canal configurado:
+  </p>
+
+  <div
+    id="selectedChannel"
+    class="muted"
+  >
+    Nenhum canal configurado.
   </div>
 
 </section>
 
 
+<!-- ================================================= -->
 <!-- LOGS -->
+<!-- ================================================= -->
+
 <section class="card full">
 
   <h2>📋 Logs</h2>
 
-  <div id="logs" class="log">
-    Carregando logs...
+  <div
+    id="logs"
+    class="log"
+  >
+    <span class="muted">
+      Carregando logs...
+    </span>
   </div>
 
 </section>
@@ -353,7 +437,12 @@
 
 <script>
 
+  // =====================================================
+  // VARIÁVEIS
+  // =====================================================
+
   let currentSchedules = [];
+
   let guilds = [];
 
 
@@ -365,23 +454,871 @@
 
     try {
 
-      const response = await fetch("/api/status");
+      const response =
+        await fetch("/api/status");
 
-      const data = await response.json();
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+
+      }
+
+      const data =
+        await response.json();
 
 
-      const dot = document.getElementById("dot");
+      // Indicador online/offline
+
+      const dot =
+        document.getElementById("dot");
 
       dot.className =
         "dot " +
-        (data.online ? "online" : "");
+        (
+          data.online
+            ? "online"
+            : ""
+        );
 
 
-      document.getElementById("statusText").textContent =
+      document.getElementById(
+        "statusText"
+      ).textContent =
         data.online
           ? "BOT ONLINE"
           : "BOT OFFLINE";
 
 
-      // CORRIGIDO:
-      // backend retorna botName
+      // Nome do bot
+
+      document.getElementById(
+        "bot"
+      ).textContent =
+        data.botName || "-";
+
+
+      // Quantidade de servidores
+
+      document.getElementById(
+        "guilds"
+      ).textContent =
+        data.guildCount ?? 0;
+
+
+      // Canal
+
+      document.getElementById(
+        "channelId"
+      ).value =
+        data.channelId || "";
+
+
+      document.getElementById(
+        "selectedChannel"
+      ).textContent =
+        data.channelId
+          ? data.channelId
+          : "Nenhum canal configurado";
+
+
+      // Envio automático
+
+      document.getElementById(
+        "autoSend"
+      ).checked =
+        Boolean(data.autoSend);
+
+
+      // Último patch
+
+      document.getElementById(
+        "lastPatch"
+      ).textContent =
+        data.lastPatchUrl ||
+        "Nenhum patch registrado";
+
+
+      // Horários
+
+      const schedules =
+        data.schedules || [];
+
+
+      if (
+        JSON.stringify(
+          currentSchedules
+        ) !==
+        JSON.stringify(
+          schedules
+        )
+      ) {
+
+        currentSchedules =
+          schedules;
+
+        renderSchedules();
+
+      }
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Erro ao carregar status:",
+        error
+      );
+
+
+      document.getElementById(
+        "statusText"
+      ).textContent =
+        "ERRO AO CONECTAR AO PAINEL";
+
+    }
+
+  }
+
+
+  // =====================================================
+  // SERVIDORES
+  // =====================================================
+
+  async function loadGuilds() {
+
+    try {
+
+      const response =
+        await fetch("/api/guilds");
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+
+      }
+
+
+      const data =
+        await response.json();
+
+
+      guilds =
+        Array.isArray(data)
+          ? data
+          : [];
+
+
+      const select =
+        document.getElementById(
+          "guildSelect"
+        );
+
+
+      select.innerHTML = "";
+
+
+      // Nenhum servidor
+
+      if (
+        guilds.length === 0
+      ) {
+
+        const option =
+          document.createElement(
+            "option"
+          );
+
+        option.value = "";
+
+        option.textContent =
+          "Nenhum servidor encontrado";
+
+        select.appendChild(
+          option
+        );
+
+        showGuild(null);
+
+        return;
+
+      }
+
+
+      // Adiciona os servidores
+
+      guilds.forEach(
+        guild => {
+
+          const option =
+            document.createElement(
+              "option"
+            );
+
+          option.value =
+            guild.id;
+
+          option.textContent =
+            guild.name;
+
+          select.appendChild(
+            option
+          );
+
+        }
+      );
+
+
+      // Seleciona o primeiro
+
+      select.value =
+        guilds[0].id;
+
+
+      showGuild(
+        guilds[0]
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Erro ao carregar servidores:",
+        error
+      );
+
+
+      const select =
+        document.getElementById(
+          "guildSelect"
+        );
+
+
+      select.innerHTML =
+        "";
+
+
+      const option =
+        document.createElement(
+          "option"
+        );
+
+      option.value = "";
+
+      option.textContent =
+        "Erro ao carregar servidores";
+
+      select.appendChild(
+        option
+      );
+
+
+      showGuild(null);
+
+    }
+
+  }
+
+
+  // =====================================================
+  // MOSTRAR SERVIDOR
+  // =====================================================
+
+  function showGuild(
+    guild
+  ) {
+
+    const info =
+      document.getElementById(
+        "guildInfo"
+      );
+
+
+    const selected =
+      document.getElementById(
+        "selectedGuild"
+      );
+
+
+    if (!guild) {
+
+      info.innerHTML = `
+        <div class="server-box">
+          <span class="muted">
+            Nenhum servidor encontrado.
+          </span>
+        </div>
+      `;
+
+      selected.textContent =
+        "Nenhum servidor selecionado.";
+
+      return;
+
+    }
+
+
+    const icon =
+      guild.icon;
+
+
+    info.innerHTML = `
+
+      <div class="server-box">
+
+        <div class="server-header">
+
+          ${
+            icon
+
+              ? `
+                <img
+                  class="server-icon"
+                  src="${escapeHtml(icon)}"
+                  alt="Ícone do servidor"
+                >
+              `
+
+              : `
+                <div
+                  class="server-icon"
+                ></div>
+              `
+          }
+
+          <div>
+
+            <div class="server-name">
+
+              ${escapeHtml(
+                guild.name
+              )}
+
+            </div>
+
+            <div class="server-id">
+
+              ID:
+              ${escapeHtml(
+                guild.id
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    `;
+
+
+    selected.textContent =
+      guild.name;
+
+  }
+
+
+  // =====================================================
+  // ALTERAR SERVIDOR
+  // =====================================================
+
+  document
+    .getElementById(
+      "guildSelect"
+    )
+    .addEventListener(
+      "change",
+      function () {
+
+        const guild =
+          guilds.find(
+            item =>
+              item.id ===
+              this.value
+          );
+
+
+        showGuild(
+          guild
+        );
+
+      }
+    );
+
+
+  // =====================================================
+  // HORÁRIOS
+  // =====================================================
+
+  function renderSchedules() {
+
+    const box =
+      document.getElementById(
+        "schedules"
+      );
+
+
+    box.innerHTML = "";
+
+
+    currentSchedules.forEach(
+      (
+        time,
+        index
+      ) => {
+
+        const row =
+          document.createElement(
+            "div"
+          );
+
+
+        row.className =
+          "schedule-row";
+
+
+        row.innerHTML = `
+
+          <input
+            type="time"
+            value="${escapeHtml(time)}"
+            onchange="
+              updateSchedule(
+                ${index},
+                this.value
+              )
+            "
+          >
+
+          <button
+            class="danger"
+            onclick="
+              removeSchedule(
+                ${index}
+              )
+            "
+          >
+            Remover
+          </button>
+
+        `;
+
+
+        box.appendChild(
+          row
+        );
+
+      }
+    );
+
+  }
+
+
+  function updateSchedule(
+    index,
+    value
+  ) {
+
+    currentSchedules[
+      index
+    ] = value;
+
+  }
+
+
+  function addSchedule() {
+
+    currentSchedules.push(
+      "18:00"
+    );
+
+    renderSchedules();
+
+  }
+
+
+  function removeSchedule(
+    index
+  ) {
+
+    currentSchedules.splice(
+      index,
+      1
+    );
+
+    renderSchedules();
+
+  }
+
+
+  // =====================================================
+  // SALVAR CONFIGURAÇÃO
+  // =====================================================
+
+  async function saveConfig() {
+
+    try {
+
+      const response =
+        await fetch(
+          "/api/config",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify({
+
+                schedules:
+                  currentSchedules,
+
+                channelId:
+                  document
+                    .getElementById(
+                      "channelId"
+                    )
+                    .value,
+
+                autoSend:
+                  document
+                    .getElementById(
+                      "autoSend"
+                    )
+                    .checked
+
+              })
+
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (
+        data.success
+      ) {
+
+        alert(
+          "Configurações salvas!"
+        );
+
+      }
+
+      else {
+
+        alert(
+          "Erro ao salvar: " +
+          (
+            data.error ||
+            "erro desconhecido"
+          )
+        );
+
+      }
+
+
+      await loadStatus();
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Erro ao salvar:",
+        error
+      );
+
+
+      alert(
+        "Erro ao salvar configurações."
+      );
+
+    }
+
+  }
+
+
+  // =====================================================
+  // VERIFICAR AGORA
+  // =====================================================
+
+  async function checkNow() {
+
+    try {
+
+      alert(
+        "Busca iniciada. Acompanhe o resultado nos logs."
+      );
+
+
+      await fetch(
+        "/api/check",
+        {
+          method: "POST"
+        }
+      );
+
+
+      await loadStatus();
+
+      await loadLogs();
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Erro na verificação:",
+        error
+      );
+
+    }
+
+  }
+
+
+  // =====================================================
+  // LOGS
+  // =====================================================
+
+  async function loadLogs() {
+
+    const box =
+      document.getElementById(
+        "logs"
+      );
+
+
+    try {
+
+      const response =
+        await fetch(
+          "/api/logs"
+        );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+
+      }
+
+
+      const logs =
+        await response.json();
+
+
+      renderLogs(
+        Array.isArray(logs)
+          ? logs
+          : []
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Erro ao carregar logs:",
+        error
+      );
+
+
+      box.innerHTML = `
+
+        <span class="error">
+
+          Erro ao carregar logs:
+          ${escapeHtml(
+            error.message
+          )}
+
+        </span>
+
+      `;
+
+    }
+
+  }
+
+
+  // =====================================================
+  // RENDERIZAR LOGS
+  // =====================================================
+
+  function renderLogs(
+    logs
+  ) {
+
+    const box =
+      document.getElementById(
+        "logs"
+      );
+
+
+    if (
+      !logs.length
+    ) {
+
+      box.innerHTML = `
+        <span class="muted">
+          Nenhum log ainda.
+        </span>
+      `;
+
+      return;
+
+    }
+
+
+    box.innerHTML =
+      logs
+        .map(
+          log => {
+
+            const type =
+              String(
+                log.type || "info"
+              ).toLowerCase();
+
+
+            return `
+
+              <div
+                class="
+                  log-line
+                  ${escapeHtml(type)}
+                "
+              >
+
+                [
+
+                ${escapeHtml(
+                  log.time
+                )}
+
+                ]
+
+                ${escapeHtml(
+                  log.message
+                )}
+
+              </div>
+
+            `;
+
+          }
+        )
+        .join("");
+
+  }
+
+
+  // =====================================================
+  // ESCAPE HTML
+  // =====================================================
+
+  function escapeHtml(
+    text
+  ) {
+
+    return String(
+      text ?? ""
+    )
+
+      .replaceAll(
+        "&",
+        "&amp;"
+      )
+
+      .replaceAll(
+        "<",
+        "&lt;"
+      )
+
+      .replaceAll(
+        ">",
+        "&gt;"
+      )
+
+      .replaceAll(
+        '"',
+        "&quot;"
+      )
+
+      .replaceAll(
+        "'",
+        "&#039;"
+      );
+
+  }
+
+
+  // =====================================================
+  // INICIALIZAÇÃO
+  // =====================================================
+
+  async function loadPanel() {
+
+    // Cada função possui
+    // seu próprio tratamento de erro.
+    // Assim, se uma falhar,
+    // as outras continuam.
+
+    loadStatus();
+
+    loadGuilds();
+
+    loadLogs();
+
+  }
+
+
+  // Carrega o painel
+
+  loadPanel();
+
+
+  // Atualiza status a cada 5 segundos
+
+  setInterval(
+    loadStatus,
+    5000
+  );
+
+
+  // Atualiza logs a cada 5 segundos
+
+  setInterval(
+    loadLogs,
+    5000
+  );
+
+
+  // Atualiza servidores
+  // a cada 30 segundos
+
+  setInterval(
+    loadGuilds,
+    30000
+  );
+
+</script>
+
+</body>
+</html>
