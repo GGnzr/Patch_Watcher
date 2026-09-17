@@ -178,6 +178,12 @@
       margin-top: 4px;
     }
 
+    .channel-info {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #8d94a3;
+    }
+
     /* LOGS */
 
     .log {
@@ -243,9 +249,7 @@
   <div class="grid">
 
 ```
-<!-- ================================================= -->
 <!-- STATUS -->
-<!-- ================================================= -->
 
 <section class="card">
 
@@ -275,19 +279,14 @@
     Último patch registrado:
   </p>
 
-  <div
-    id="lastPatch"
-    class="muted"
-  >
+  <div id="lastPatch" class="muted">
     -
   </div>
 
 </section>
 
 
-<!-- ================================================= -->
 <!-- SERVIDOR -->
-<!-- ================================================= -->
 
 <section class="card">
 
@@ -316,24 +315,28 @@
 </section>
 
 
-<!-- ================================================= -->
 <!-- CONFIGURAÇÕES -->
-<!-- ================================================= -->
 
 <section class="card">
 
   <h2>⚙️ Configurações</h2>
 
-
-  <label>
-    Canal do Discord (ID)
+  <label for="channelSelect">
+    Canal para envio
   </label>
 
-  <input
-    id="channelId"
-    type="text"
-    placeholder="Ex.: 123456789012345678"
-  >
+  <select id="channelSelect">
+
+    <option value="">
+      Selecione um servidor primeiro
+    </option>
+
+  </select>
+
+  <div class="channel-info">
+    O bot exibirá automaticamente os canais
+    que consegue acessar.
+  </div>
 
 
   <label>
@@ -378,9 +381,7 @@
 </section>
 
 
-<!-- ================================================= -->
-<!-- CANAL / INFORMAÇÕES -->
-<!-- ================================================= -->
+<!-- INFORMAÇÕES -->
 
 <section class="card">
 
@@ -411,21 +412,18 @@
 </section>
 
 
-<!-- ================================================= -->
 <!-- LOGS -->
-<!-- ================================================= -->
 
 <section class="card full">
 
   <h2>📋 Logs</h2>
 
-  <div
-    id="logs"
-    class="log"
-  >
+  <div id="logs" class="log">
+
     <span class="muted">
       Carregando logs...
     </span>
+
   </div>
 
 </section>
@@ -445,6 +443,8 @@
 
   let guilds = [];
 
+  let channels = [];
+
 
   // =====================================================
   // STATUS
@@ -457,6 +457,7 @@
       const response =
         await fetch("/api/status");
 
+
       if (!response.ok) {
 
         throw new Error(
@@ -465,14 +466,14 @@
 
       }
 
+
       const data =
         await response.json();
 
 
-      // Indicador online/offline
-
       const dot =
         document.getElementById("dot");
+
 
       dot.className =
         "dot " +
@@ -491,15 +492,11 @@
           : "BOT OFFLINE";
 
 
-      // Nome do bot
-
       document.getElementById(
         "bot"
       ).textContent =
         data.botName || "-";
 
-
-      // Quantidade de servidores
 
       document.getElementById(
         "guilds"
@@ -507,31 +504,11 @@
         data.guildCount ?? 0;
 
 
-      // Canal
-
-      document.getElementById(
-        "channelId"
-      ).value =
-        data.channelId || "";
-
-
-      document.getElementById(
-        "selectedChannel"
-      ).textContent =
-        data.channelId
-          ? data.channelId
-          : "Nenhum canal configurado";
-
-
-      // Envio automático
-
       document.getElementById(
         "autoSend"
       ).checked =
         Boolean(data.autoSend);
 
-
-      // Último patch
 
       document.getElementById(
         "lastPatch"
@@ -540,23 +517,17 @@
         "Nenhum patch registrado";
 
 
-      // Horários
-
-      const schedules =
-        data.schedules || [];
-
-
       if (
         JSON.stringify(
           currentSchedules
         ) !==
         JSON.stringify(
-          schedules
+          data.schedules || []
         )
       ) {
 
         currentSchedules =
-          schedules;
+          data.schedules || [];
 
         renderSchedules();
 
@@ -622,34 +593,24 @@
       select.innerHTML = "";
 
 
-      // Nenhum servidor
-
       if (
         guilds.length === 0
       ) {
 
-        const option =
-          document.createElement(
-            "option"
-          );
-
-        option.value = "";
-
-        option.textContent =
-          "Nenhum servidor encontrado";
-
-        select.appendChild(
-          option
-        );
+        select.innerHTML = `
+          <option value="">
+            Nenhum servidor encontrado
+          </option>
+        `;
 
         showGuild(null);
+
+        loadChannels("");
 
         return;
 
       }
 
-
-      // Adiciona os servidores
 
       guilds.forEach(
         guild => {
@@ -659,11 +620,14 @@
               "option"
             );
 
+
           option.value =
             guild.id;
 
+
           option.textContent =
             guild.name;
+
 
           select.appendChild(
             option
@@ -673,7 +637,9 @@
       );
 
 
-      // Seleciona o primeiro
+      const savedChannel =
+        await getCurrentChannel();
+
 
       select.value =
         guilds[0].id;
@@ -681,6 +647,12 @@
 
       showGuild(
         guilds[0]
+      );
+
+
+      await loadChannels(
+        guilds[0].id,
+        savedChannel
       );
 
     }
@@ -699,23 +671,11 @@
         );
 
 
-      select.innerHTML =
-        "";
-
-
-      const option =
-        document.createElement(
-          "option"
-        );
-
-      option.value = "";
-
-      option.textContent =
-        "Erro ao carregar servidores";
-
-      select.appendChild(
-        option
-      );
+      select.innerHTML = `
+        <option value="">
+          Erro ao carregar servidores
+        </option>
+      `;
 
 
       showGuild(null);
@@ -723,6 +683,288 @@
     }
 
   }
+
+
+  // =====================================================
+  // CARREGAR CANAL ATUAL
+  // =====================================================
+
+  async function getCurrentChannel() {
+
+    try {
+
+      const response =
+        await fetch(
+          "/api/status"
+        );
+
+
+      if (!response.ok) {
+        return "";
+      }
+
+
+      const data =
+        await response.json();
+
+
+      return data.channelId || "";
+
+    }
+
+    catch {
+
+      return "";
+
+    }
+
+  }
+
+
+  // =====================================================
+  // CARREGAR CANAIS
+  // =====================================================
+
+  async function loadChannels(
+    guildId,
+    selectedChannelId = ""
+  ) {
+
+    const select =
+      document.getElementById(
+        "channelSelect"
+      );
+
+
+    select.innerHTML = `
+      <option value="">
+        Carregando canais...
+      </option>
+    `;
+
+
+    if (!guildId) {
+
+      select.innerHTML = `
+        <option value="">
+          Selecione um servidor primeiro
+        </option>
+      `;
+
+      updateSelectedChannel("");
+
+      return;
+
+    }
+
+
+    try {
+
+      const response =
+        await fetch(
+          `/api/channels/${guildId}`
+        );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+
+      }
+
+
+      const data =
+        await response.json();
+
+
+      channels =
+        Array.isArray(data)
+          ? data
+          : [];
+
+
+      select.innerHTML = "";
+
+
+      if (
+        channels.length === 0
+      ) {
+
+        select.innerHTML = `
+          <option value="">
+            Nenhum canal disponível
+          </option>
+        `;
+
+        updateSelectedChannel("");
+
+        return;
+
+      }
+
+
+      channels.forEach(
+        channel => {
+
+          const option =
+            document.createElement(
+              "option"
+            );
+
+
+          option.value =
+            channel.id;
+
+
+          /*
+           * A API pode retornar:
+           *
+           * name
+           * type
+           *
+           * ou outros campos.
+           */
+
+          let prefix = "#";
+
+
+          if (
+            channel.type &&
+            String(
+              channel.type
+            ).toLowerCase()
+              .includes("forum")
+          ) {
+
+            prefix = "🗂️";
+
+          }
+
+
+          option.textContent =
+            `${prefix} ${channel.name}`;
+
+
+          select.appendChild(
+            option
+          );
+
+        }
+      );
+
+
+      /*
+       * Tenta manter o canal já salvo.
+       */
+
+      if (
+        selectedChannelId &&
+        channels.some(
+          channel =>
+            channel.id ===
+            selectedChannelId
+        )
+      ) {
+
+        select.value =
+          selectedChannelId;
+
+      }
+
+      else {
+
+        select.selectedIndex = 0;
+
+      }
+
+
+      updateSelectedChannel(
+        select.value
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Erro ao carregar canais:",
+        error
+      );
+
+
+      select.innerHTML = `
+        <option value="">
+          Erro ao carregar canais
+        </option>
+      `;
+
+
+      updateSelectedChannel("");
+
+    }
+
+  }
+
+
+  // =====================================================
+  // ALTERAR SERVIDOR
+  // =====================================================
+
+  document
+    .getElementById(
+      "guildSelect"
+    )
+    .addEventListener(
+      "change",
+      async function () {
+
+        const guild =
+          guilds.find(
+            item =>
+              item.id ===
+              this.value
+          );
+
+
+        showGuild(
+          guild
+        );
+
+
+        /*
+         * Ao mudar o servidor,
+         * recarrega automaticamente
+         * os canais daquele servidor.
+         */
+
+        await loadChannels(
+          this.value
+        );
+
+      }
+    );
+
+
+  // =====================================================
+  // ALTERAR CANAL
+  // =====================================================
+
+  document
+    .getElementById(
+      "channelSelect"
+    )
+    .addEventListener(
+      "change",
+      function () {
+
+        updateSelectedChannel(
+          this.value
+        );
+
+      }
+    );
 
 
   // =====================================================
@@ -749,14 +991,18 @@
 
       info.innerHTML = `
         <div class="server-box">
+
           <span class="muted">
             Nenhum servidor encontrado.
           </span>
+
         </div>
       `;
 
+
       selected.textContent =
         "Nenhum servidor selecionado.";
+
 
       return;
 
@@ -826,31 +1072,51 @@
 
 
   // =====================================================
-  // ALTERAR SERVIDOR
+  // MOSTRAR CANAL SELECIONADO
   // =====================================================
 
-  document
-    .getElementById(
-      "guildSelect"
-    )
-    .addEventListener(
-      "change",
-      function () {
+  function updateSelectedChannel(
+    channelId
+  ) {
 
-        const guild =
-          guilds.find(
-            item =>
-              item.id ===
-              this.value
-          );
+    const element =
+      document.getElementById(
+        "selectedChannel"
+      );
 
 
-        showGuild(
-          guild
-        );
+    if (!channelId) {
 
-      }
-    );
+      element.textContent =
+        "Nenhum canal selecionado.";
+
+      return;
+
+    }
+
+
+    const channel =
+      channels.find(
+        item =>
+          item.id ===
+          channelId
+      );
+
+
+    if (!channel) {
+
+      element.textContent =
+        channelId;
+
+      return;
+
+    }
+
+
+    element.textContent =
+      `# ${channel.name} (${channel.id})`;
+
+  }
 
 
   // =====================================================
@@ -966,6 +1232,25 @@
 
     try {
 
+      const channelId =
+        document
+          .getElementById(
+            "channelSelect"
+          )
+          .value;
+
+
+      if (!channelId) {
+
+        alert(
+          "Selecione um canal para envio."
+        );
+
+        return;
+
+      }
+
+
       const response =
         await fetch(
           "/api/config",
@@ -984,11 +1269,7 @@
                   currentSchedules,
 
                 channelId:
-                  document
-                    .getElementById(
-                      "channelId"
-                    )
-                    .value,
+                  channelId,
 
                 autoSend:
                   document
@@ -1001,6 +1282,15 @@
 
           }
         );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+
+      }
 
 
       const data =
@@ -1064,12 +1354,22 @@
       );
 
 
-      await fetch(
-        "/api/check",
-        {
-          method: "POST"
-        }
-      );
+      const response =
+        await fetch(
+          "/api/check",
+          {
+            method: "POST"
+          }
+        );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+
+      }
 
 
       await loadStatus();
@@ -1193,7 +1493,8 @@
 
             const type =
               String(
-                log.type || "info"
+                log.type ||
+                "info"
               ).toLowerCase();
 
 
@@ -1275,21 +1576,33 @@
 
   async function loadPanel() {
 
-    // Cada função possui
-    // seu próprio tratamento de erro.
-    // Assim, se uma falhar,
-    // as outras continuam.
+    /*
+     * Primeiro carrega o status.
+     */
 
-    loadStatus();
+    await loadStatus();
 
-    loadGuilds();
 
-    loadLogs();
+    /*
+     * Depois carrega servidores.
+     * loadGuilds também carrega
+     * os canais do primeiro servidor.
+     */
+
+    await loadGuilds();
+
+
+    /*
+     * Logs são carregados
+     * separadamente.
+     */
+
+    await loadLogs();
 
   }
 
 
-  // Carrega o painel
+  // Inicializa painel
 
   loadPanel();
 
