@@ -6,6 +6,7 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const express = require("express");
 const cron = require("node-cron");
+const { Redis } = require("@upstash/redis");
 
 const {
   Client,
@@ -35,22 +36,60 @@ const CONFIG_FILE = path.join(__dirname, "config.json");
 // CONFIGURAÇÃO
 // =====================================================
 
-function loadConfig() {
-  try {
-    if (!fs.existsSync(CONFIG_FILE)) {
-      const defaultConfig = {
-        schedules: ["10:00", "14:00"],
-        channelId: "",
-        autoSend: true,
-        lastPatchUrl: ""
-      };
+const DEFAULT_CONFIG = {
+  schedules: ["10:00", "14:00"],
+  channelId: "",
+  autoSend: true,
+  lastPatchUrl: ""
+};
 
-      fs.writeFileSync(
-        CONFIG_FILE,
-        JSON.stringify(defaultConfig, null, 2)
+// Se as variáveis de ambiente do Upstash estiverem presentes, a config é
+// persistida lá (sobrevive a redeploys/restarts, inclusive no free tier do
+// Render, que apaga o disco local a cada restart). Sem essas variáveis, o
+// bot cai de volta para o config.json local (ex: rodando numa VPS/Docker
+// com disco persistente).
+const USE_REDIS = Boolean(
+  process.env.UPSTASH_REDIS_REST_URL &&
+  process.env.UPSTASH_REDIS_REST_TOKEN
+);
+
+const redis = USE_REDIS
+  ? Redis.fromEnv()
+  : null;
+
+const REDIS_CONFIG_KEY = "patchwatcher:config";
+
+async function loadConfig() {
+  if (USE_REDIS) {
+    try {
+      const stored = await redis.get(REDIS_CONFIG_KEY);
+
+      if (stored) {
+        return { ...DEFAULT_CONFIG, ...stored };
+      }
+
+      await redis.set(REDIS_CONFIG_KEY, DEFAULT_CONFIG);
+
+      return { ...DEFAULT_CONFIG };
+
+    } catch (error) {
+      console.error(
+        "Erro ao carregar config do Upstash Redis:",
+        error
       );
 
-      return defaultConfig;
+      return { ...DEFAULT_CONFIG };
+    }
+  }
+
+  try {
+    if (!fs.existsSync(CONFIG_FILE)) {
+      fs.writeFileSync(
+        CONFIG_FILE,
+        JSON.stringify(DEFAULT_CONFIG, null, 2)
+      );
+
+      return { ...DEFAULT_CONFIG };
     }
 
     return JSON.parse(
@@ -63,23 +102,35 @@ function loadConfig() {
       error
     );
 
-    return {
-      schedules: ["10:00", "14:00"],
-      channelId: "",
-      autoSend: true,
-      lastPatchUrl: ""
-    };
+    return { ...DEFAULT_CONFIG };
   }
 }
 
-function saveConfig(config) {
+async function saveConfig(config) {
+  if (USE_REDIS) {
+    try {
+      await redis.set(REDIS_CONFIG_KEY, config);
+      return;
+
+    } catch (error) {
+      console.error(
+        "Erro ao salvar config no Upstash Redis:",
+        error
+      );
+
+      return;
+    }
+  }
+
   fs.writeFileSync(
     CONFIG_FILE,
     JSON.stringify(config, null, 2)
   );
 }
 
-let config = loadConfig();
+// Placeholder até o bootstrap assíncrono (função start(), no fim do
+// arquivo) carregar a config real antes do bot logar e do painel subir.
+let config = { ...DEFAULT_CONFIG };
 
 // =====================================================
 // LOGS
@@ -418,11 +469,16 @@ async function checkPatch(
         : "Nenhum patch novo encontrado."
     );
 
+    let sent = false;
+    let attemptedSend = false;
+
     if (
       (isNew && config.autoSend) ||
       forceSend
     ) {
-      const sent =
+      attemptedSend = true;
+
+      sent =
         await sendPatchToDiscord(
           patch
         );
@@ -431,14 +487,16 @@ async function checkPatch(
         config.lastPatchUrl =
           patch.url;
 
-        saveConfig(config);
+        await saveConfig(config);
       }
     }
 
     return {
       success: true,
       isNew,
-      patch
+      patch,
+      attemptedSend,
+      sent
     };
 
   } catch (error) {
@@ -614,9 +672,22 @@ client.on("interactionCreate", async (interaction) => {
 
     const patch = result.patch;
 
-    await interaction.editReply(
-      `✅ Patch **${patch.title}** enviado para o canal configurado.`
-    );
+    if (!result.attemptedSend) {
+      // Não deveria acontecer já que forceSend=true,
+      // mas cobre o caso defensivamente.
+      await interaction.editReply(
+        `ℹ️ Patch **${patch.title}** encontrado, mas o envio não foi acionado.`
+      );
+    } else if (!result.sent) {
+      await interaction.editReply(
+        `⚠️ Patch **${patch.title}** foi encontrado, mas **não consegui enviá-lo ao canal**. ` +
+        `Verifique se há um canal configurado no painel e se o bot tem permissão para postar nele (veja os logs do painel para o motivo exato).`
+      );
+    } else {
+      await interaction.editReply(
+        `✅ Patch **${patch.title}** enviado para o canal configurado.`
+      );
+    }
 
     addLog(
       "SUCCESS",
@@ -690,7 +761,7 @@ app.get(
 
 app.post(
   "/api/config",
-  (req, res) => {
+  async (req, res) => {
     try {
       const newConfig =
         req.body;
@@ -734,7 +805,7 @@ app.post(
           ""
       };
 
-      saveConfig(config);
+      await saveConfig(config);
 
       restartSchedules();
 
@@ -897,32 +968,39 @@ app.get(
 );
 
 // =====================================================
-// SERVIDOR WEB
+// BOOTSTRAP (carrega config antes de tudo, sobe painel e loga no Discord)
 // =====================================================
 
-app.listen(
-  PORT,
-  () => {
-    addLog(
-      "SUCCESS",
-      `Painel web disponível na porta ${PORT}.`
-    );
-  }
-);
+async function start() {
+  config = await loadConfig();
 
-// =====================================================
-// LOGIN DISCORD
-// =====================================================
+  addLog(
+    "INFO",
+    USE_REDIS
+      ? "Configuração carregada do Upstash Redis (persistente entre restarts)."
+      : "Configuração carregada do config.json local."
+  );
 
-client
-  .login(
-    process.env.BOT_TOKEN
-  )
-  .catch(
-    (error) => {
+  app.listen(
+    PORT,
+    () => {
       addLog(
-        "ERROR",
-        `Erro ao conectar no Discord: ${error.message}`
+        "SUCCESS",
+        `Painel web disponível na porta ${PORT}.`
       );
     }
   );
+
+  try {
+    await client.login(
+      process.env.BOT_TOKEN
+    );
+  } catch (error) {
+    addLog(
+      "ERROR",
+      `Erro ao conectar no Discord: ${error.message}`
+    );
+  }
+}
+
+start();
