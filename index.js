@@ -20,6 +20,7 @@ const {
 } = require("discord.js");
 
 const app = express();
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -52,9 +53,15 @@ function loadConfig() {
       return defaultConfig;
     }
 
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    return JSON.parse(
+      fs.readFileSync(CONFIG_FILE, "utf8")
+    );
+
   } catch (error) {
-    console.error("Erro ao carregar config.json:", error);
+    console.error(
+      "Erro ao carregar config.json:",
+      error
+    );
 
     return {
       schedules: ["10:00", "14:00"],
@@ -95,7 +102,9 @@ function addLog(type, message) {
     logs.pop();
   }
 
-  console.log(`[${type}] ${message}`);
+  console.log(
+    `[${type}] ${message}`
+  );
 }
 
 // =====================================================
@@ -114,9 +123,6 @@ const client = new Client({
 // BUSCAR PATCH
 // =====================================================
 
-
-
-
 async function fetchPatchNotes() {
   try {
     addLog(
@@ -124,9 +130,9 @@ async function fetchPatchNotes() {
       "Consultando página de patches da Riot..."
     );
 
-    // ---------------------------------------------------------
+    // -------------------------------------------------
     // 1. CONSULTA A LISTA DE PATCHES
-    // ---------------------------------------------------------
+    // -------------------------------------------------
 
     const response = await axios.get(
       PATCH_NOTES_URL,
@@ -139,11 +145,15 @@ async function fetchPatchNotes() {
       }
     );
 
-    const $ = cheerio.load(response.data);
+    const $ = cheerio.load(
+      response.data
+    );
 
     // Procura o patch mais recente
     const latestPatch =
-      $('a[href*="patch-"]').first().attr("href");
+      $('a[href*="patch-"]')
+        .first()
+        .attr("href");
 
     if (!latestPatch) {
       throw new Error(
@@ -165,9 +175,9 @@ async function fetchPatchNotes() {
       `Patch encontrado: ${patchLink}`
     );
 
-    // ---------------------------------------------------------
+    // -------------------------------------------------
     // 2. ABRE A PÁGINA ESPECÍFICA DO PATCH
-    // ---------------------------------------------------------
+    // -------------------------------------------------
 
     const patchPageResponse =
       await axios.get(
@@ -186,39 +196,47 @@ async function fetchPatchNotes() {
         patchPageResponse.data
       );
 
-    // ---------------------------------------------------------
-    // 3. PEGA A MESMA IMAGEM QUE FUNCIONAVA NO BOT ANTIGO
-    // ---------------------------------------------------------
+    // -------------------------------------------------
+    // 3. PEGA A MESMA IMAGEM DO BOT ANTIGO
+    // -------------------------------------------------
 
     let imageUrl =
       patchPage(
         ".skins.cboxElement img"
-      ).first().attr("src") || null;
+      )
+        .first()
+        .attr("src") || null;
 
-    // ---------------------------------------------------------
+    // -------------------------------------------------
     // 4. FALLBACKS
-    // ---------------------------------------------------------
+    // -------------------------------------------------
 
     if (!imageUrl) {
       imageUrl =
         patchPage(
           ".skins.cboxElement img"
-        ).first().attr("data-src") || null;
+        )
+          .first()
+          .attr("data-src") || null;
     }
 
     if (!imageUrl) {
       imageUrl =
         patchPage(
           ".skins.cboxElement img"
-        ).first().attr("data-lazy-src") || null;
+        )
+          .first()
+          .attr("data-lazy-src") || null;
     }
 
-    // Fallback adicional para srcset
+    // Fallback para srcset
     if (!imageUrl) {
       const srcset =
         patchPage(
           ".skins.cboxElement img"
-        ).first().attr("srcset");
+        )
+          .first()
+          .attr("srcset");
 
       if (srcset) {
         imageUrl = srcset
@@ -228,20 +246,29 @@ async function fetchPatchNotes() {
       }
     }
 
-    // Corrige URL relativa da imagem
+    // -------------------------------------------------
+    // 5. CORRIGE URL DA IMAGEM
+    // -------------------------------------------------
+
     if (imageUrl) {
-      if (imageUrl.startsWith("//")) {
-        imageUrl = "https:" + imageUrl;
-      } else if (imageUrl.startsWith("/")) {
+      if (
+        imageUrl.startsWith("//")
+      ) {
+        imageUrl =
+          "https:" + imageUrl;
+
+      } else if (
+        imageUrl.startsWith("/")
+      ) {
         imageUrl =
           "https://www.leagueoflegends.com" +
           imageUrl;
       }
     }
 
-    // ---------------------------------------------------------
-    // 5. TÍTULO
-    // ---------------------------------------------------------
+    // -------------------------------------------------
+    // 6. TÍTULO
+    // -------------------------------------------------
 
     let title =
       patchPage(
@@ -254,9 +281,9 @@ async function fetchPatchNotes() {
       .replace(/\s+/g, " ")
       .trim();
 
-    // ---------------------------------------------------------
-    // 6. LOG DA IMAGEM
-    // ---------------------------------------------------------
+    // -------------------------------------------------
+    // 7. LOG DA IMAGEM
+    // -------------------------------------------------
 
     if (imageUrl) {
       addLog(
@@ -286,17 +313,103 @@ async function fetchPatchNotes() {
   }
 }
 
+// =====================================================
+// ENVIAR PATCH PARA O DISCORD
+// =====================================================
+
+async function sendPatchToDiscord(patch) {
+  try {
+    if (!config.channelId) {
+      addLog(
+        "WARN",
+        "Nenhum canal configurado para envio."
+      );
+
+      return false;
+    }
+
+    const channel =
+      await client.channels.fetch(
+        config.channelId
+      );
+
+    if (!channel) {
+      throw new Error(
+        "Canal configurado não foi encontrado."
+      );
+    }
+
+    const embed =
+      new EmbedBuilder()
+        .setTitle(
+          patch.title ||
+          "🎮 Novos Patch Notes!"
+        )
+        .setURL(patch.url)
+        .setDescription(
+          "📰 Notas de atualização do League of Legends"
+        )
+        .setTimestamp();
+
+    // Imagem de destaque
+    if (patch.image) {
+      embed.setImage(
+        patch.image
+      );
+    }
+
+    const button =
+      new ButtonBuilder()
+        .setLabel(
+          "Ver notas do patch"
+        )
+        .setURL(patch.url)
+        .setStyle(
+          ButtonStyle.Link
+        );
+
+    const row =
+      new ActionRowBuilder()
+        .addComponents(
+          button
+        );
+
+    await channel.send({
+      embeds: [embed],
+      components: [row]
+    });
+
+    addLog(
+      "SUCCESS",
+      `Patch enviado para o canal ${channel.name}.`
+    );
+
+    return true;
+
+  } catch (error) {
+    addLog(
+      "ERROR",
+      `Erro ao enviar patch para Discord: ${error.message}`
+    );
+
+    return false;
+  }
+}
 
 // =====================================================
 // VERIFICAR PATCH
 // =====================================================
 
-async function checkPatch(forceSend = false) {
+async function checkPatch(
+  forceSend = false
+) {
   try {
-    const patch = await fetchPatchNotes();
+    const patch =
+      await fetchPatchNotes();
 
     const isNew =
-      patch.url !== config.lastPatchUrl;
+      patch.url !==
+      config.lastPatchUrl;
 
     addLog(
       "INFO",
@@ -305,11 +418,19 @@ async function checkPatch(forceSend = false) {
         : "Nenhum patch novo encontrado."
     );
 
-    if ((isNew && config.autoSend) || forceSend) {
-      const sent = await sendPatchToDiscord(patch);
+    if (
+      (isNew && config.autoSend) ||
+      forceSend
+    ) {
+      const sent =
+        await sendPatchToDiscord(
+          patch
+        );
 
       if (sent) {
-        config.lastPatchUrl = patch.url;
+        config.lastPatchUrl =
+          patch.url;
+
         saveConfig(config);
       }
     }
@@ -319,6 +440,7 @@ async function checkPatch(forceSend = false) {
       isNew,
       patch
     };
+
   } catch (error) {
     return {
       success: false,
@@ -334,49 +456,66 @@ async function checkPatch(forceSend = false) {
 let scheduledJobs = [];
 
 function restartSchedules() {
-  scheduledJobs.forEach((job) => job.stop());
+  scheduledJobs.forEach(
+    (job) => job.stop()
+  );
 
   scheduledJobs = [];
 
-  if (!Array.isArray(config.schedules)) {
+  if (
+    !Array.isArray(
+      config.schedules
+    )
+  ) {
     config.schedules = [];
   }
 
-  config.schedules.forEach((time) => {
-    if (!/^\d{2}:\d{2}$/.test(time)) {
-      addLog(
-        "WARN",
-        `Horário inválido ignorado: ${time}`
-      );
-      return;
-    }
-
-    const [hour, minute] = time.split(":");
-
-    const expression = `${minute} ${hour} * * *`;
-
-    const job = cron.schedule(
-      expression,
-      async () => {
+  config.schedules.forEach(
+    (time) => {
+      if (
+        !/^\d{2}:\d{2}$/.test(time)
+      ) {
         addLog(
-          "INFO",
-          `Verificação automática iniciada às ${time}.`
+          "WARN",
+          `Horário inválido ignorado: ${time}`
         );
 
-        await checkPatch(false);
-      },
-      {
-        timezone: "America/Sao_Paulo"
+        return;
       }
-    );
 
-    scheduledJobs.push(job);
+      const [
+        hour,
+        minute
+      ] = time.split(":");
 
-    addLog(
-      "INFO",
-      `Agendamento criado para ${time}.`
-    );
-  });
+      const expression =
+        `${minute} ${hour} * * *`;
+
+      const job =
+        cron.schedule(
+          expression,
+          async () => {
+            addLog(
+              "INFO",
+              `Verificação automática iniciada às ${time}.`
+            );
+
+            await checkPatch(false);
+          },
+          {
+            timezone:
+              "America/Sao_Paulo"
+          }
+        );
+
+      scheduledJobs.push(job);
+
+      addLog(
+        "INFO",
+        `Agendamento criado para ${time}.`
+      );
+    }
+  );
 }
 
 // =====================================================
@@ -394,12 +533,17 @@ async function registerCommands() {
         .toJSON()
     ];
 
-    const rest = new REST({
-      version: "10"
-    }).setToken(process.env.BOT_TOKEN);
+    const rest =
+      new REST({
+        version: "10"
+      }).setToken(
+        process.env.BOT_TOKEN
+      );
 
     await rest.put(
-      Routes.applicationCommands(client.user.id),
+      Routes.applicationCommands(
+        client.user.id
+      ),
       {
         body: commands
       }
@@ -409,6 +553,7 @@ async function registerCommands() {
       "SUCCESS",
       "Comando /patch registrado no Discord."
     );
+
   } catch (error) {
     addLog(
       "ERROR",
@@ -417,260 +562,402 @@ async function registerCommands() {
   }
 }
 
-client.once("ready", async () => {
-  addLog(
-    "SUCCESS",
-    `Bot conectado como ${client.user.tag}.`
-  );
+// =====================================================
+// BOT READY
+// =====================================================
 
-  addLog(
-    "INFO",
-    `Servidores encontrados: ${client.guilds.cache.size}`
-  );
+client.once(
+  "ready",
+  async () => {
+    addLog(
+      "SUCCESS",
+      `Bot conectado como ${client.user.tag}.`
+    );
 
-  restartSchedules();
+    addLog(
+      "INFO",
+      `Servidores encontrados: ${client.guilds.cache.size}`
+    );
 
-  await registerCommands();
-});
+    restartSchedules();
+
+    await registerCommands();
+  }
+);
 
 // =====================================================
 // INTERAÇÃO /PATCH
 // =====================================================
 
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) {
-    return;
-  }
+client.on(
+  "interactionCreate",
+  async (interaction) => {
+    if (
+      !interaction.isChatInputCommand()
+    ) {
+      return;
+    }
 
-  if (interaction.commandName !== "patch") {
-    return;
-  }
+    if (
+      interaction.commandName !==
+      "patch"
+    ) {
+      return;
+    }
 
-  await interaction.deferReply();
+    await interaction.deferReply();
 
-  const result = await checkPatch(true);
+    const result =
+      await checkPatch(true);
 
-  if (!result.success) {
-    await interaction.editReply(
-      `❌ Erro ao consultar o patch: ${result.error}`
+    if (!result.success) {
+      await interaction.editReply(
+        `❌ Erro ao consultar o patch: ${result.error}`
+      );
+
+      return;
+    }
+
+    const patch =
+      result.patch;
+
+    const embed =
+      new EmbedBuilder()
+        .setTitle(
+          patch.title
+        )
+        .setURL(
+          patch.url
+        )
+        .setDescription(
+          "📰 Notas de atualização do League of Legends"
+        )
+        .setTimestamp();
+
+    if (patch.image) {
+      embed.setImage(
+        patch.image
+      );
+    }
+
+    const button =
+      new ButtonBuilder()
+        .setLabel(
+          "Ver notas do patch"
+        )
+        .setURL(
+          patch.url
+        )
+        .setStyle(
+          ButtonStyle.Link
+        );
+
+    const row =
+      new ActionRowBuilder()
+        .addComponents(
+          button
+        );
+
+    await interaction.editReply({
+      embeds: [embed],
+      components: [row]
+    });
+
+    addLog(
+      "SUCCESS",
+      `/patch executado por ${interaction.user.tag}.`
     );
-
-    return;
   }
-
-  const patch = result.patch;
-
-  const embed = new EmbedBuilder()
-    .setTitle(patch.title)
-    .setURL(patch.url)
-    .setDescription(
-      "📰 Notas de atualização do League of Legends"
-    )
-    .setTimestamp();
-
-  if (patch.image) {
-    embed.setImage(patch.image);
-  }
-
-  const button = new ButtonBuilder()
-    .setLabel("Ver notas do patch")
-    .setURL(patch.url)
-    .setStyle(ButtonStyle.Link);
-
-  const row = new ActionRowBuilder().addComponents(button);
-
-  await interaction.editReply({
-    embeds: [embed],
-    components: [row]
-  });
-
-  addLog(
-    "SUCCESS",
-    `/patch executado por ${interaction.user.tag}.`
-  );
-});
+);
 
 // =====================================================
 // PAINEL WEB
 // =====================================================
 
-// Status geral
-app.get("/api/status", (req, res) => {
-  res.json({
-    online: client.isReady(),
-    botName: client.user
-      ? client.user.tag
-      : null,
-    guildCount: client.guilds.cache.size,
-    schedules: config.schedules,
-    channelId: config.channelId,
-    autoSend: config.autoSend,
-    lastPatchUrl: config.lastPatchUrl
-  });
-});
+// -----------------------------------------------------
+// STATUS
+// -----------------------------------------------------
 
-// Configuração
-app.get("/api/config", (req, res) => {
-  res.json(config);
-});
-
-// Salvar configuração
-app.post("/api/config", (req, res) => {
-  try {
-    const newConfig = req.body;
-
-    if (
-      !newConfig ||
-      !Array.isArray(newConfig.schedules)
-    ) {
-      return res.status(400).json({
-        success: false,
-        error: "Horários inválidos."
-      });
-    }
-
-    const validSchedules = newConfig.schedules.filter(
-      (time) => /^\d{2}:\d{2}$/.test(time)
-    );
-
-    config = {
-      schedules: validSchedules,
-      channelId: newConfig.channelId || "",
-      autoSend: Boolean(newConfig.autoSend),
-      lastPatchUrl: config.lastPatchUrl || ""
-    };
-
-    saveConfig(config);
-
-    restartSchedules();
-
-    addLog(
-      "SUCCESS",
-      "Configurações do painel foram atualizadas."
-    );
-
+app.get(
+  "/api/status",
+  (req, res) => {
     res.json({
-      success: true,
-      config
-    });
-  } catch (error) {
-    addLog(
-      "ERROR",
-      `Erro ao salvar configuração: ${error.message}`
-    );
+      online:
+        client.isReady(),
 
-    res.status(500).json({
-      success: false,
-      error: error.message
+      botName:
+        client.user
+          ? client.user.tag
+          : null,
+
+      guildCount:
+        client.guilds.cache.size,
+
+      schedules:
+        config.schedules,
+
+      channelId:
+        config.channelId,
+
+      autoSend:
+        config.autoSend,
+
+      lastPatchUrl:
+        config.lastPatchUrl
     });
   }
-});
+);
+
+// -----------------------------------------------------
+// CONFIGURAÇÃO
+// -----------------------------------------------------
+
+app.get(
+  "/api/config",
+  (req, res) => {
+    res.json(config);
+  }
+);
+
+// -----------------------------------------------------
+// SALVAR CONFIGURAÇÃO
+// -----------------------------------------------------
+
+app.post(
+  "/api/config",
+  (req, res) => {
+    try {
+      const newConfig =
+        req.body;
+
+      if (
+        !newConfig ||
+        !Array.isArray(
+          newConfig.schedules
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Horários inválidos."
+        });
+      }
+
+      const validSchedules =
+        newConfig.schedules.filter(
+          (time) =>
+            /^\d{2}:\d{2}$/.test(
+              time
+            )
+        );
+
+      config = {
+        schedules:
+          validSchedules,
+
+        channelId:
+          newConfig.channelId ||
+          "",
+
+        autoSend:
+          Boolean(
+            newConfig.autoSend
+          ),
+
+        lastPatchUrl:
+          config.lastPatchUrl ||
+          ""
+      };
+
+      saveConfig(config);
+
+      restartSchedules();
+
+      addLog(
+        "SUCCESS",
+        "Configurações do painel foram atualizadas."
+      );
+
+      res.json({
+        success: true,
+        config
+      });
+
+    } catch (error) {
+      addLog(
+        "ERROR",
+        `Erro ao salvar configuração: ${error.message}`
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          error.message
+      });
+    }
+  }
+);
 
 // =====================================================
 // LISTAR SERVIDORES
 // =====================================================
 
-app.get("/api/guilds", (req, res) => {
-  try {
-    const guilds = client.guilds.cache.map((guild) => ({
-      id: guild.id,
-      name: guild.name,
-      icon: guild.iconURL()
-    }));
+app.get(
+  "/api/guilds",
+  (req, res) => {
+    try {
+      const guilds =
+        client.guilds.cache.map(
+          (guild) => ({
+            id:
+              guild.id,
 
-    res.json(guilds);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message
-    });
-  }
-});
+            name:
+              guild.name,
 
-// =====================================================
-// LISTAR CANAIS DE UM SERVIDOR
-// =====================================================
+            icon:
+              guild.iconURL()
+          })
+        );
 
-app.get("/api/channels/:guildId", async (req, res) => {
-  try {
-    const guild = client.guilds.cache.get(
-      req.params.guildId
-    );
+      res.json(guilds);
 
-    if (!guild) {
-      return res.status(404).json({
-        error: "Servidor não encontrado."
+    } catch (error) {
+      res.status(500).json({
+        error:
+          error.message
       });
     }
-
-    const channels = guild.channels.cache
-      .filter(
-        (channel) =>
-          channel.isTextBased() &&
-          channel.viewable
-      )
-      .map((channel) => ({
-        id: channel.id,
-        name: channel.name,
-        type: channel.type
-      }));
-
-    res.json(channels);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message
-    });
   }
-});
+);
+
+// =====================================================
+// LISTAR CANAIS
+// =====================================================
+
+app.get(
+  "/api/channels/:guildId",
+  async (req, res) => {
+    try {
+      const guild =
+        client.guilds.cache.get(
+          req.params.guildId
+        );
+
+      if (!guild) {
+        return res.status(404).json({
+          error:
+            "Servidor não encontrado."
+        });
+      }
+
+      const channels =
+        guild.channels.cache
+          .filter(
+            (channel) =>
+              channel.isTextBased() &&
+              channel.viewable
+          )
+          .map(
+            (channel) => ({
+              id:
+                channel.id,
+
+              name:
+                channel.name,
+
+              type:
+                channel.type
+            })
+          );
+
+      res.json(
+        channels
+      );
+
+    } catch (error) {
+      res.status(500).json({
+        error:
+          error.message
+      });
+    }
+  }
+);
 
 // =====================================================
 // VERIFICAR AGORA
 // =====================================================
 
-app.post("/api/check", async (req, res) => {
-  addLog(
-    "INFO",
-    "Verificação manual solicitada pelo painel."
-  );
+app.post(
+  "/api/check",
+  async (req, res) => {
+    addLog(
+      "INFO",
+      "Verificação manual solicitada pelo painel."
+    );
 
-  const result = await checkPatch(true);
+    const result =
+      await checkPatch(true);
 
-  res.json(result);
-});
+    res.json(
+      result
+    );
+  }
+);
 
 // =====================================================
 // LOGS
 // =====================================================
 
-app.get("/api/logs", (req, res) => {
-  res.json(logs);
-});
+app.get(
+  "/api/logs",
+  (req, res) => {
+    res.json(
+      logs
+    );
+  }
+);
 
 // =====================================================
 // HEALTH CHECK
 // =====================================================
 
-app.get("/health", (req, res) => {
-  res.status(200).send("OK");
-});
+app.get(
+  "/health",
+  (req, res) => {
+    res
+      .status(200)
+      .send("OK");
+  }
+);
 
 // =====================================================
-// SERVIDOR
+// SERVIDOR WEB
 // =====================================================
 
-app.listen(PORT, () => {
-  addLog(
-    "SUCCESS",
-    `Painel web disponível na porta ${PORT}.`
-  );
-});
+app.listen(
+  PORT,
+  () => {
+    addLog(
+      "SUCCESS",
+      `Painel web disponível na porta ${PORT}.`
+    );
+  }
+);
 
 // =====================================================
 // LOGIN DISCORD
 // =====================================================
 
-client.login(process.env.BOT_TOKEN).catch((error) => {
-  addLog(
-    "ERROR",
-    `Erro ao conectar no Discord: ${error.message}`
+client
+  .login(
+    process.env.BOT_TOKEN
+  )
+  .catch(
+    (error) => {
+      addLog(
+        "ERROR",
+        `Erro ao conectar no Discord: ${error.message}`
+      );
+    }
   );
-});
