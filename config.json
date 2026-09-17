@@ -1,0 +1,9 @@
+{
+  "schedules": [
+    "10:00",
+    "14:00"
+  ],
+  "channelId": "",
+  "autoSend": true,
+  "lastPatchUrl": ""
+}
