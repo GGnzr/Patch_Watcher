@@ -590,65 +590,50 @@ client.once(
 // INTERAÇÃO /PATCH
 // =====================================================
 
-client.on(
-  "interactionCreate",
-  async (interaction) => {
-    if (
-      !interaction.isChatInputCommand()
-    ) {
-      return;
-    }
 
-    if (
-      interaction.commandName !==
-      "patch"
-    ) {
-      return;
-    }
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
-    await interaction.deferReply();
+  if (interaction.commandName !== "patch") return;
 
-    try {
-      const result =
-        await checkPatch(true);
+  // A resposta do slash command será privada,
+  // evitando aparecer uma segunda mensagem no canal.
+  await interaction.deferReply({
+    ephemeral: true
+  });
 
-      if (!result.success) {
-        await interaction.editReply(
-          `❌ Erro ao consultar o patch: ${result.error}`
-        );
+  try {
+    const result = await checkPatch(true);
 
-        return;
-      }
-
-      const patch =
-        result.patch;
-
-      // O checkPatch(true) já enviou o patch
-      // para o canal configurado.
-      await interaction.editReply({
-        content:
-          `✅ Patch **${patch.title}** enviado para o canal configurado.`
-      });
-
-      addLog(
-        "SUCCESS",
-        `/patch executado por ${interaction.user.tag}.`
-      );
-
-    } catch (error) {
-      addLog(
-        "ERROR",
-        `Erro no comando /patch: ${error.message}`
-      );
-
+    if (!result.success) {
       await interaction.editReply(
-        `❌ Erro ao executar /patch: ${error.message}`
+        `❌ Erro ao consultar o patch: ${result.error}`
       );
+      return;
     }
+
+    const patch = result.patch;
+
+    await interaction.editReply(
+      `✅ Patch **${patch.title}** enviado para o canal configurado.`
+    );
+
+    addLog(
+      "SUCCESS",
+      `/patch executado por ${interaction.user.tag}.`
+    );
+
+  } catch (error) {
+    addLog(
+      "ERROR",
+      `Erro no comando /patch: ${error.message}`
+    );
+
+    await interaction.editReply(
+      `❌ Erro ao executar /patch: ${error.message}`
+    );
   }
-);
-
-
+});
 
 // =====================================================
 // PAINEL WEB
