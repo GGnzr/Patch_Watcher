@@ -114,151 +114,173 @@ const client = new Client({
 // BUSCAR PATCH
 // =====================================================
 
+
 async function fetchPatchNotes() {
-try {
-addLog(
-"INFO",
-"Consultando página de patches da Riot..."
-);
+  try {
+    addLog(
+      "INFO",
+      "Consultando página de patches da Riot..."
+    );
 
-const response = await axios.get(
-  PATCH_NOTES_URL,
-  {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
-    },
-    timeout: 15000
-  }
-);
+    const response = await axios.get(
+      PATCH_NOTES_URL,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
+        },
+        timeout: 15000
+      }
+    );
 
-const $ = cheerio.load(response.data);
+    const $ = cheerio.load(response.data);
 
-let patchLink = null;
+    let patchLink = null;
+    let imageUrl = null;
+    let title = null;
 
-// =====================================================
-// ENCONTRAR O PATCH MAIS RECENTE
-// =====================================================
+    // Procura o primeiro card/link de patch
+    const patchCard = $('a[href*="league-of-legends-patch-"]').first();
 
-const currentPatch =
-  $('a[href*="league-of-legends-patch-"]').first();
+    if (patchCard.length) {
+      patchLink = patchCard.attr("href");
 
-if (currentPatch.length) {
-  patchLink = currentPatch.attr("href");
-}
+      // Tenta pegar a imagem existente dentro do próprio card
+      const image = patchCard.find("img").first();
 
-// Fallback
-if (!patchLink) {
-  const fallbackPatch =
-    $('a[href*="patch-"]').first();
+      if (image.length) {
+        imageUrl =
+          image.attr("src") ||
+          image.attr("data-src") ||
+          image.attr("data-lazy-src") ||
+          null;
 
-  if (fallbackPatch.length) {
-    patchLink =
-      fallbackPatch.attr("href");
-  }
-}
+        // Se não encontrou no src, tenta srcset
+        if (!imageUrl) {
+          const srcset = image.attr("srcset");
 
-if (!patchLink) {
-  throw new Error(
-    "Não foi encontrado nenhum link de patch na página da Riot."
-  );
-}
+          if (srcset) {
+            imageUrl = srcset
+              .split(",")[0]
+              .trim()
+              .split(" ")[0];
+          }
+        }
+      }
 
-// =====================================================
-// CORRIGIR URL
-// =====================================================
-
-if (patchLink.startsWith("/")) {
-  patchLink =
-    "https://www.leagueoflegends.com" +
-    patchLink;
-}
-
-addLog(
-  "INFO",
-  `Patch encontrado: ${patchLink}`
-);
-
-// =====================================================
-// ABRIR A PÁGINA DO PATCH
-// =====================================================
-
-const patchResponse =
-  await axios.get(
-    patchLink,
-    {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
-      },
-      timeout: 15000
+      // Título do próprio card
+      title =
+        image.attr("alt") ||
+        patchCard.find("h2, h3").first().text() ||
+        patchCard.text();
     }
-  );
 
-const patchPage =
-  cheerio.load(
-    patchResponse.data
-  );
+    // Fallback caso o seletor principal não encontre
+    if (!patchLink) {
+      const fallbackPatch =
+        $('a[href*="patch-"]').first();
 
-// =====================================================
-// IMAGEM DO PATCH
-// =====================================================
+      if (fallbackPatch.length) {
+        patchLink = fallbackPatch.attr("href");
 
-let imageUrl =
-  patchPage(
-    'meta[property="og:image"]'
-  ).attr("content") ||
-  patchPage(
-    'meta[name="twitter:image"]'
-  ).attr("content") ||
-  null;
+        const image = fallbackPatch.find("img").first();
 
-// =====================================================
-// TÍTULO DO PATCH
-// =====================================================
+        if (image.length) {
+          imageUrl =
+            image.attr("src") ||
+            image.attr("data-src") ||
+            image.attr("data-lazy-src") ||
+            null;
 
-let title =
-  patchPage(
-    'meta[property="og:title"]'
-  ).attr("content") ||
-  patchPage("title").text() ||
-  "Patch do League of Legends";
+          if (!imageUrl) {
+            const srcset = image.attr("srcset");
 
-title = title.trim();
+            if (srcset) {
+              imageUrl = srcset
+                .split(",")[0]
+                .trim()
+                .split(" ")[0];
+            }
+          }
+        }
 
-// =====================================================
-// LOG DA IMAGEM
-// =====================================================
+        title =
+          image?.attr("alt") ||
+          fallbackPatch.find("h2, h3").first().text() ||
+          fallbackPatch.text();
+      }
+    }
 
-if (imageUrl) {
-  addLog(
-    "SUCCESS",
-    `Imagem do patch encontrada: ${imageUrl}`
-  );
-} else {
-  addLog(
-    "WARN",
-    "Não foi encontrada imagem na página específica do patch."
-  );
+    if (!patchLink) {
+      throw new Error(
+        "Não foi encontrado nenhum link de patch na página da Riot."
+      );
+    }
+
+    // Corrige URL relativa
+    if (patchLink.startsWith("/")) {
+      patchLink =
+        "https://www.leagueoflegends.com" +
+        patchLink;
+    }
+
+    // Corrige URL relativa da imagem
+    if (imageUrl && imageUrl.startsWith("/")) {
+      imageUrl =
+        "https://www.leagueoflegends.com" +
+        imageUrl;
+    }
+
+    // Caso a imagem venha com URL protocol-relative
+    if (imageUrl && imageUrl.startsWith("//")) {
+      imageUrl = "https:" + imageUrl;
+    }
+
+    // Se ainda não encontrou título, tenta metadados
+    if (!title || !title.trim()) {
+      title =
+        $('meta[property="og:title"]').attr("content") ||
+        $("title").text() ||
+        "Patch do League of Legends";
+    }
+
+    title = title
+      .replace(/\s+/g, " ")
+      .trim();
+
+    addLog(
+      "INFO",
+      `Patch encontrado: ${patchLink}`
+    );
+
+    if (imageUrl) {
+      addLog(
+        "SUCCESS",
+        `Imagem do card encontrada: ${imageUrl}`
+      );
+    } else {
+      addLog(
+        "WARN",
+        "Não foi encontrada imagem no card do patch."
+      );
+    }
+
+    return {
+      url: patchLink,
+      title,
+      image: imageUrl
+    };
+
+  } catch (error) {
+    addLog(
+      "ERROR",
+      `Erro ao consultar patch: ${error.message}`
+    );
+
+    throw error;
+  }
 }
 
-return {
-  url: patchLink,
-  title,
-  image: imageUrl
-};
-
-} catch (error) {
-
-addLog(
-  "ERROR",
-  `Erro ao consultar patch: ${error.message}`
-);
-
-throw error;
-
-}
-}
 // =====================================================
 // ENVIAR PATCH PARA DISCORD
 // =====================================================
