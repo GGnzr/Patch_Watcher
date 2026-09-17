@@ -29,7 +29,7 @@ async function fetchPatchNotes() {
     const $ = cheerio.load(data);
 
     // Extrair o link do patch mais recente
-    const latestPatch = $('a[href*="/patch-"]').first().attr("href");
+    const latestPatch = $('a[href*="patch-"]').first().attr("href");
     const fullUrl = `https://www.leagueoflegends.com${latestPatch}`;
 
     if (fullUrl !== lastPatchNotes) {
