@@ -1,217 +1,387 @@
 <!DOCTYPE html>
+
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Patch Watcher</title>
+
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
       background: #0f1117;
       color: #e8eaf0;
     }
-    .container { max-width: 1100px; margin: 0 auto; padding: 28px 18px; }
-    h1 { margin: 0 0 6px; }
-    .subtitle { color: #9ca3af; margin-bottom: 24px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 18px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+    }
+
+    .subtitle {
+      color: #9ca3af;
+      margin-bottom: 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
     .card {
       background: #181b24;
       border: 1px solid #292e3a;
       border-radius: 12px;
       padding: 20px;
     }
-    .full { grid-column: 1 / -1; }
-    .status { display: flex; align-items: center; gap: 10px; font-size: 20px; }
-    .dot { width: 12px; height: 12px; border-radius: 50%; background: #777; }
-    .online { background: #35c759; }
-    label { display: block; margin: 14px 0 6px; color: #b8becb; }
-    input[type="text"], input[type="time"] {
-      width: 100%; padding: 10px; border-radius: 8px;
-      border: 1px solid #343a48; background: #10131a; color: white;
+
+    .full {
+      grid-column: 1 / -1;
     }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #777;
+    }
+
+    .online {
+      background: #35c759;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      color: #b8becb;
+    }
+
+    input[type="text"],
+    input[type="time"],
+    select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #343a48;
+      background: #10131a;
+      color: white;
+    }
+
     button {
-      border: 0; border-radius: 8px; padding: 10px 14px;
-      cursor: pointer; margin: 8px 6px 0 0;
-      background: #5865f2; color: white; font-weight: bold;
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      margin: 8px 6px 0 0;
+      background: #5865f2;
+      color: white;
+      font-weight: bold;
     }
-    button.secondary { background: #303542; }
-    button.danger { background: #8e3540; }
-    .schedule-row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .schedule-row input { flex: 1; }
+
+    button.secondary {
+      background: #303542;
+    }
+
+    button.danger {
+      background: #8e3540;
+    }
+
+    .schedule-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .schedule-row input {
+      flex: 1;
+    }
+
     .log {
-      height: 360px; overflow: auto; background: #0b0d12;
-      border-radius: 8px; padding: 10px; font-family: Consolas, monospace;
+      height: 360px;
+      overflow: auto;
+      background: #0b0d12;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: Consolas, monospace;
       font-size: 13px;
     }
-    .log-line { padding: 6px 4px; border-bottom: 1px solid #171a22; }
-    .error { color: #ff7777; }
-    .warning { color: #f2c96d; }
-    .info { color: #cdd2df; }
-    .success { color: #6ee7a1; }
-    .muted { color: #8d94a3; }
-    .row { display: flex; align-items: center; gap: 10px; }
-    .row input[type="checkbox"] { width: 18px; height: 18px; }
+
+    .log-line {
+      padding: 6px 4px;
+      border-bottom: 1px solid #171a22;
+    }
+
+    .error {
+      color: #ff7777;
+    }
+
+    .warning {
+      color: #f2c96d;
+    }
+
+    .info {
+      color: #cdd2df;
+    }
+
+    .success {
+      color: #6ee7a1;
+    }
+
+    .muted {
+      color: #8d94a3;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+    }
+
+    .server-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #10131a;
+      border: 1px solid #292e3a;
+    }
+
+    .server-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #303542;
+    }
+
+    .server-name {
+      font-weight: bold;
+    }
+
+    .server-id {
+      color: #8d94a3;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
     @media (max-width: 750px) {
-      .grid { grid-template-columns: 1fr; }
-      .full { grid-column: auto; }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .full {
+        grid-column: auto;
+      }
     }
   </style>
+
 </head>
+
 <body>
+
 <div class="container">
+
   <h1>🎮 Patch Watcher</h1>
-  <div class="subtitle">Painel de controle do bot do Discord</div>
+
+  <div class="subtitle">
+    Painel de controle do bot do Discord
+  </div>
 
   <div class="grid">
-    <section class="card">
-      <h2>Status</h2>
-      <div class="status">
-        <span id="dot" class="dot"></span>
-        <span id="statusText">Carregando...</span>
-      </div>
-      <p>Bot: <b id="bot">-</b></p>
-      <p>Servidores: <b id="guilds">-</b></p>
-      <p>Último patch registrado:</p>
-      <div id="lastPatch" class="muted">-</div>
-    </section>
 
-    <section class="card">
-      <h2>⚙️ Configurações</h2>
+```
+<!-- STATUS -->
+<section class="card">
 
-      <label>Canal do Discord (ID)</label>
-      <input id="channelId" type="text" placeholder="Ex.: 123456789012345678">
+  <h2>Status</h2>
 
-      <label>Horários de verificação</label>
-      <div id="schedules"></div>
-      <button class="secondary" onclick="addSchedule()">+ Adicionar horário</button>
-
-      <label class="row">
-        <input id="autoSend" type="checkbox">
-        Enviar automaticamente quando houver patch novo
-      </label>
-
-      <button onclick="saveConfig()">💾 Salvar configurações</button>
-      <button class="secondary" onclick="checkNow()">🔍 Verificar agora</button>
-    </section>
-
-    <section class="card full">
-      <h2>📋 Logs</h2>
-      <div id="logs" class="log">Carregando logs...</div>
-    </section>
+  <div class="status">
+    <span id="dot" class="dot"></span>
+    <span id="statusText">Carregando...</span>
   </div>
+
+  <p>
+    Bot:
+    <b id="bot">-</b>
+  </p>
+
+  <p>
+    Servidores:
+    <b id="guilds">-</b>
+  </p>
+
+  <p>
+    Último patch registrado:
+  </p>
+
+  <div id="lastPatch" class="muted">
+    -
+  </div>
+
+</section>
+
+
+<!-- SERVIDORES -->
+<section class="card">
+
+  <h2>🌐 Servidor</h2>
+
+  <label for="guildSelect">
+    Servidor do Discord
+  </label>
+
+  <select id="guildSelect">
+    <option value="">
+      Carregando servidores...
+    </option>
+  </select>
+
+  <div id="selectedGuild" class="muted" style="margin-top: 12px;">
+    Nenhum servidor selecionado.
+  </div>
+
+</section>
+
+
+<!-- CONFIGURAÇÕES -->
+<section class="card">
+
+  <h2>⚙️ Configurações</h2>
+
+  <label>
+    Canal do Discord (ID)
+  </label>
+
+  <input
+    id="channelId"
+    type="text"
+    placeholder="Ex.: 123456789012345678"
+  >
+
+  <label>
+    Horários de verificação
+  </label>
+
+  <div id="schedules"></div>
+
+  <button
+    class="secondary"
+    onclick="addSchedule()"
+  >
+    + Adicionar horário
+  </button>
+
+  <label class="row">
+
+    <input
+      id="autoSend"
+      type="checkbox"
+    >
+
+    Enviar automaticamente quando houver patch novo
+
+  </label>
+
+  <button onclick="saveConfig()">
+    💾 Salvar configurações
+  </button>
+
+  <button
+    class="secondary"
+    onclick="checkNow()"
+  >
+    🔍 Verificar agora
+  </button>
+
+</section>
+
+
+<!-- SERVIDOR DETALHADO -->
+<section class="card">
+
+  <h2>📡 Servidor conectado</h2>
+
+  <div id="guildInfo">
+    <span class="muted">
+      Carregando...
+    </span>
+  </div>
+
+</section>
+
+
+<!-- LOGS -->
+<section class="card full">
+
+  <h2>📋 Logs</h2>
+
+  <div id="logs" class="log">
+    Carregando logs...
+  </div>
+
+</section>
+```
+
+  </div>
+
 </div>
 
 <script>
+
   let currentSchedules = [];
+  let guilds = [];
+
+
+  // =====================================================
+  // STATUS
+  // =====================================================
 
   async function loadStatus() {
+
     try {
+
       const response = await fetch("/api/status");
+
       const data = await response.json();
 
+
       const dot = document.getElementById("dot");
-      dot.className = "dot " + (data.online ? "online" : "");
+
+      dot.className =
+        "dot " +
+        (data.online ? "online" : "");
+
 
       document.getElementById("statusText").textContent =
-        data.online ? "BOT ONLINE" : "BOT OFFLINE";
+        data.online
+          ? "BOT ONLINE"
+          : "BOT OFFLINE";
 
-      document.getElementById("bot").textContent = data.bot;
-      document.getElementById("guilds").textContent = data.guilds;
-      document.getElementById("channelId").value = data.channelId || "";
-      document.getElementById("autoSend").checked = data.autoSend;
-      document.getElementById("lastPatch").textContent =
-        data.lastPatchUrl || "Nenhum patch registrado";
 
-      if (JSON.stringify(currentSchedules) !== JSON.stringify(data.schedules)) {
-        currentSchedules = data.schedules || [];
-        renderSchedules();
-      }
-
-      renderLogs(data.logs || []);
-    } catch (error) {
-      document.getElementById("statusText").textContent = "ERRO AO CONECTAR AO PAINEL";
-    }
-  }
-
-  function renderSchedules() {
-    const box = document.getElementById("schedules");
-    box.innerHTML = "";
-
-    currentSchedules.forEach((time, index) => {
-      const row = document.createElement("div");
-      row.className = "schedule-row";
-      row.innerHTML = `
-        <input type="time" value="${time}" onchange="updateSchedule(${index}, this.value)">
-        <button class="danger" onclick="removeSchedule(${index})">Remover</button>
-      `;
-      box.appendChild(row);
-    });
-  }
-
-  function updateSchedule(index, value) {
-    currentSchedules[index] = value;
-  }
-
-  function addSchedule() {
-    currentSchedules.push("18:00");
-    renderSchedules();
-  }
-
-  function removeSchedule(index) {
-    currentSchedules.splice(index, 1);
-    renderSchedules();
-  }
-
-  async function saveConfig() {
-    const response = await fetch("/api/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        schedules: currentSchedules,
-        channelId: document.getElementById("channelId").value,
-        autoSend: document.getElementById("autoSend").checked
-      })
-    });
-
-    const data = await response.json();
-    alert(data.ok ? "Configurações salvas!" : "Erro ao salvar.");
-    loadStatus();
-  }
-
-  async function checkNow() {
-    alert("Busca iniciada. Acompanhe o resultado nos logs.");
-    await fetch("/api/check", { method: "POST" });
-    loadStatus();
-  }
-
-  function renderLogs(logs) {
-    const box = document.getElementById("logs");
-
-    if (!logs.length) {
-      box.innerHTML = '<span class="muted">Nenhum log ainda.</span>';
-      return;
-    }
-
-    box.innerHTML = logs.map(log => `
-      <div class="log-line ${log.type}">
-        [${escapeHtml(log.time)}] ${escapeHtml(log.message)}
-      </div>
-    `).join("");
-  }
-
-  function escapeHtml(text) {
-    return String(text)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  loadStatus();
-  setInterval(loadStatus, 5000);
-</script>
-</body>
-</html>
+      // CORRIGIDO:
+      // backend retorna botName
