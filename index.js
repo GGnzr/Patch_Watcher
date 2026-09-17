@@ -115,78 +115,150 @@ const client = new Client({
 // =====================================================
 
 async function fetchPatchNotes() {
-  try {
-    addLog("INFO", "Consultando página de patches da Riot...");
+try {
+addLog(
+"INFO",
+"Consultando página de patches da Riot..."
+);
 
-    const response = await axios.get(PATCH_NOTES_URL, {
+const response = await axios.get(
+  PATCH_NOTES_URL,
+  {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
+    },
+    timeout: 15000
+  }
+);
+
+const $ = cheerio.load(response.data);
+
+let patchLink = null;
+
+// =====================================================
+// ENCONTRAR O PATCH MAIS RECENTE
+// =====================================================
+
+const currentPatch =
+  $('a[href*="league-of-legends-patch-"]').first();
+
+if (currentPatch.length) {
+  patchLink = currentPatch.attr("href");
+}
+
+// Fallback
+if (!patchLink) {
+  const fallbackPatch =
+    $('a[href*="patch-"]').first();
+
+  if (fallbackPatch.length) {
+    patchLink =
+      fallbackPatch.attr("href");
+  }
+}
+
+if (!patchLink) {
+  throw new Error(
+    "Não foi encontrado nenhum link de patch na página da Riot."
+  );
+}
+
+// =====================================================
+// CORRIGIR URL
+// =====================================================
+
+if (patchLink.startsWith("/")) {
+  patchLink =
+    "https://www.leagueoflegends.com" +
+    patchLink;
+}
+
+addLog(
+  "INFO",
+  `Patch encontrado: ${patchLink}`
+);
+
+// =====================================================
+// ABRIR A PÁGINA DO PATCH
+// =====================================================
+
+const patchResponse =
+  await axios.get(
+    patchLink,
+    {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
       },
       timeout: 15000
-    });
-
-    const $ = cheerio.load(response.data);
-
-    let patchLink = null;
-
-    // Primeiro tenta encontrar o formato atual
-    const currentPatch = $('a[href*="league-of-legends-patch-"]').first();
-
-    if (currentPatch.length) {
-      patchLink = currentPatch.attr("href");
     }
+  );
 
-    // Fallback
-    if (!patchLink) {
-      const fallbackPatch = $('a[href*="patch-"]').first();
+const patchPage =
+  cheerio.load(
+    patchResponse.data
+  );
 
-      if (fallbackPatch.length) {
-        patchLink = fallbackPatch.attr("href");
-      }
-    }
+// =====================================================
+// IMAGEM DO PATCH
+// =====================================================
 
-    if (!patchLink) {
-      throw new Error(
-        "Não foi encontrado nenhum link de patch na página da Riot."
-      );
-    }
+let imageUrl =
+  patchPage(
+    'meta[property="og:image"]'
+  ).attr("content") ||
+  patchPage(
+    'meta[name="twitter:image"]'
+  ).attr("content") ||
+  null;
 
-    if (patchLink.startsWith("/")) {
-      patchLink = "https://www.leagueoflegends.com" + patchLink;
-    }
+// =====================================================
+// TÍTULO DO PATCH
+// =====================================================
 
-    // Imagem
-    let imageUrl =
-      $('meta[property="og:image"]').attr("content") ||
-      $('meta[name="twitter:image"]').attr("content") ||
-      null;
+let title =
+  patchPage(
+    'meta[property="og:title"]'
+  ).attr("content") ||
+  patchPage("title").text() ||
+  "Patch do League of Legends";
 
-    // Título
-    let title =
-      $('meta[property="og:title"]').attr("content") ||
-      $("title").text() ||
-      "Patch do League of Legends";
+title = title.trim();
 
-    title = title.trim();
+// =====================================================
+// LOG DA IMAGEM
+// =====================================================
 
-    addLog("INFO", `Patch encontrado: ${patchLink}`);
-
-    return {
-      url: patchLink,
-      title,
-      image: imageUrl
-    };
-  } catch (error) {
-    addLog(
-      "ERROR",
-      `Erro ao consultar patch: ${error.message}`
-    );
-
-    throw error;
-  }
+if (imageUrl) {
+  addLog(
+    "SUCCESS",
+    `Imagem do patch encontrada: ${imageUrl}`
+  );
+} else {
+  addLog(
+    "WARN",
+    "Não foi encontrada imagem na página específica do patch."
+  );
 }
 
+return {
+  url: patchLink,
+  title,
+  image: imageUrl
+};
+
+} catch (error) {
+
+addLog(
+  "ERROR",
+  `Erro ao consultar patch: ${error.message}`
+);
+
+throw error;
+
+}
+}
 // =====================================================
 // ENVIAR PATCH PARA DISCORD
 // =====================================================
