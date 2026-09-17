@@ -116,12 +116,17 @@ const client = new Client({
 
 
 
+
 async function fetchPatchNotes() {
   try {
     addLog(
       "INFO",
       "Consultando página de patches da Riot..."
     );
+
+    // ---------------------------------------------------------
+    // 1. CONSULTA A LISTA DE PATCHES
+    // ---------------------------------------------------------
 
     const response = await axios.get(
       PATCH_NOTES_URL,
@@ -136,170 +141,98 @@ async function fetchPatchNotes() {
 
     const $ = cheerio.load(response.data);
 
-    let patchLink = null;
-    let imageUrl = null;
-    let title = null;
+    // Procura o patch mais recente
+    const latestPatch =
+      $('a[href*="patch-"]').first().attr("href");
 
-    // Procura o card do patch
-    let patchCard = $('a[href*="league-of-legends-patch-"]').first();
-
-    if (!patchCard.length) {
-      patchCard = $('a[href*="patch-"]').first();
-    }
-
-    if (!patchCard.length) {
+    if (!latestPatch) {
       throw new Error(
-        "Não foi encontrado nenhum card de patch na página da Riot."
+        "Não foi encontrado nenhum link de patch na página da Riot."
       );
     }
 
-    patchLink = patchCard.attr("href");
+    let patchLink = latestPatch;
 
-    // ---------------------------------------------------------
-    // PROCURA A IMAGEM REAL DO CARD
-    // ---------------------------------------------------------
-
-    const images = patchCard.find("img");
-
-    images.each((index, element) => {
-      if (imageUrl) {
-        return;
-      }
-
-      const img = $(element);
-
-      const attributes = [
-        "src",
-        "srcset",
-        "data-src",
-        "data-srcset",
-        "data-lazy-src",
-        "data-lazy",
-        "data-original"
-      ];
-
-      for (const attribute of attributes) {
-        const value = img.attr(attribute);
-
-        if (!value) {
-          continue;
-        }
-
-        // Ignora placeholders SVG/base64
-        if (
-          value.startsWith("data:image") ||
-          value.includes("<svg")
-        ) {
-          continue;
-        }
-
-        // Procura diretamente uma URL da Riot
-        if (
-          value.includes("cmsassets.rgpub.io") ||
-          value.includes("rgpub.io")
-        ) {
-          // Caso seja srcset
-          const urls = value
-            .split(",")
-            .map((item) => item.trim().split(" ")[0])
-            .filter(Boolean);
-
-          const riotUrl = urls.find(
-            (url) =>
-              url.includes("cmsassets.rgpub.io") ||
-              url.includes("rgpub.io")
-          );
-
-          if (riotUrl) {
-            imageUrl = riotUrl;
-            break;
-          }
-        }
-
-        // Caso seja uma URL normal
-        if (
-          value.startsWith("https://") ||
-          value.startsWith("http://") ||
-          value.startsWith("//") ||
-          value.startsWith("/")
-        ) {
-          const urls = value
-            .split(",")
-            .map((item) => item.trim().split(" ")[0])
-            .filter(Boolean);
-
-          const validUrl = urls.find(
-            (url) =>
-              !url.startsWith("data:image") &&
-              !url.includes("<svg")
-          );
-
-          if (validUrl) {
-            imageUrl = validUrl;
-            break;
-          }
-        }
-      }
-    });
-
-    // ---------------------------------------------------------
-    // PROCURA NO HTML DO CARD
-    // ---------------------------------------------------------
-
-    if (!imageUrl) {
-      const cardHtml = patchCard.toString();
-
-      const cmsMatch = cardHtml.match(
-        /https?:\/\/cmsassets\.rgpub\.io\/[^"'\\\s<>]+/i
-      );
-
-      if (cmsMatch) {
-        imageUrl = cmsMatch[0];
-      }
-    }
-
-    // ---------------------------------------------------------
-    // TÍTULO
-    // ---------------------------------------------------------
-
-    title =
-      patchCard.find("h1, h2, h3, h4").first().text() ||
-      patchCard.find("img").first().attr("alt") ||
-      null;
-
-    if (!title || !title.trim()) {
-      title =
-        $('meta[property="og:title"]').attr("content") ||
-        $("title").text() ||
-        "Patch do League of Legends";
-    }
-
-    title = title
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // ---------------------------------------------------------
-    // CORRIGE URL DO PATCH
-    // ---------------------------------------------------------
-
+    // Corrige URL relativa
     if (patchLink.startsWith("/")) {
       patchLink =
         "https://www.leagueoflegends.com" +
         patchLink;
     }
 
+    addLog(
+      "INFO",
+      `Patch encontrado: ${patchLink}`
+    );
+
     // ---------------------------------------------------------
-    // CORRIGE URL DA IMAGEM
+    // 2. ABRE A PÁGINA ESPECÍFICA DO PATCH
     // ---------------------------------------------------------
 
+    const patchPageResponse =
+      await axios.get(
+        patchLink,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
+          },
+          timeout: 15000
+        }
+      );
+
+    const patchPage =
+      cheerio.load(
+        patchPageResponse.data
+      );
+
+    // ---------------------------------------------------------
+    // 3. PEGA A MESMA IMAGEM QUE FUNCIONAVA NO BOT ANTIGO
+    // ---------------------------------------------------------
+
+    let imageUrl =
+      patchPage(
+        ".skins.cboxElement img"
+      ).first().attr("src") || null;
+
+    // ---------------------------------------------------------
+    // 4. FALLBACKS
+    // ---------------------------------------------------------
+
+    if (!imageUrl) {
+      imageUrl =
+        patchPage(
+          ".skins.cboxElement img"
+        ).first().attr("data-src") || null;
+    }
+
+    if (!imageUrl) {
+      imageUrl =
+        patchPage(
+          ".skins.cboxElement img"
+        ).first().attr("data-lazy-src") || null;
+    }
+
+    // Fallback adicional para srcset
+    if (!imageUrl) {
+      const srcset =
+        patchPage(
+          ".skins.cboxElement img"
+        ).first().attr("srcset");
+
+      if (srcset) {
+        imageUrl = srcset
+          .split(",")[0]
+          .trim()
+          .split(" ")[0];
+      }
+    }
+
+    // Corrige URL relativa da imagem
     if (imageUrl) {
-      imageUrl = imageUrl.trim();
-
       if (imageUrl.startsWith("//")) {
         imageUrl = "https:" + imageUrl;
-      }
-
-      if (imageUrl.startsWith("/")) {
+      } else if (imageUrl.startsWith("/")) {
         imageUrl =
           "https://www.leagueoflegends.com" +
           imageUrl;
@@ -307,23 +240,33 @@ async function fetchPatchNotes() {
     }
 
     // ---------------------------------------------------------
-    // LOGS
+    // 5. TÍTULO
     // ---------------------------------------------------------
 
-    addLog(
-      "INFO",
-      `Patch encontrado: ${patchLink}`
-    );
+    let title =
+      patchPage(
+        'meta[property="og:title"]'
+      ).attr("content") ||
+      patchPage("title").text() ||
+      "Patch do League of Legends";
+
+    title = title
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // ---------------------------------------------------------
+    // 6. LOG DA IMAGEM
+    // ---------------------------------------------------------
 
     if (imageUrl) {
       addLog(
         "SUCCESS",
-        `Imagem real encontrada: ${imageUrl}`
+        `Imagem do patch encontrada: ${imageUrl}`
       );
     } else {
       addLog(
         "WARN",
-        "Não foi possível encontrar a imagem real do patch."
+        "Imagem do patch não encontrada pelo seletor .skins.cboxElement img."
       );
     }
 
@@ -342,6 +285,7 @@ async function fetchPatchNotes() {
     throw error;
   }
 }
+
 
 // =====================================================
 // VERIFICAR PATCH
