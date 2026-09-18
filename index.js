@@ -136,7 +136,42 @@ let config = { ...DEFAULT_CONFIG };
 // LOGS
 // =====================================================
 
+const REDIS_LOGS_KEY = "patchwatcher:logs";
+
 const logs = [];
+
+// Salva a lista de logs no Upstash Redis. Chamada de forma "fire and
+// forget" (sem await) porque addLog é síncrona e é chamada com muita
+// frequência — não vale a pena travar cada chamada esperando o Redis.
+function persistLogs() {
+  if (!USE_REDIS) return;
+
+  redis.set(REDIS_LOGS_KEY, logs).catch((error) => {
+    console.error(
+      "Erro ao salvar logs no Upstash Redis:",
+      error
+    );
+  });
+}
+
+// Carrega o histórico de logs salvo no Redis, se existir, para o
+// painel não começar vazio depois de um restart/cold start.
+async function loadLogs() {
+  if (!USE_REDIS) return;
+
+  try {
+    const stored = await redis.get(REDIS_LOGS_KEY);
+
+    if (Array.isArray(stored)) {
+      logs.push(...stored);
+    }
+  } catch (error) {
+    console.error(
+      "Erro ao carregar logs do Upstash Redis:",
+      error
+    );
+  }
+}
 
 function addLog(type, message) {
   const entry = {
@@ -156,6 +191,8 @@ function addLog(type, message) {
   console.log(
     `[${type}] ${message}`
   );
+
+  persistLogs();
 }
 
 // =====================================================
@@ -365,6 +402,36 @@ async function fetchPatchNotes() {
 }
 
 // =====================================================
+// EXTRAIR NÚMERO DA VERSÃO (ex: "26.18")
+// =====================================================
+
+function extractPatchVersion(patch) {
+  // Tenta achar algo tipo "26.18" no título
+  // (ex: "Notas da Atualização 26.18 do League of Legends").
+  const fromTitle =
+    patch.title &&
+    patch.title.match(/(\d{1,2}\.\d{1,2})/);
+
+  if (fromTitle) {
+    return fromTitle[1];
+  }
+
+  // Fallback: tenta achar no formato "26-18" na URL
+  // (ex: .../notas-da-atualizacao-26-18/).
+  const fromUrl =
+    patch.url &&
+    patch.url.match(/(\d{1,2})-(\d{1,2})(?:[\/-]|$)/);
+
+  if (fromUrl) {
+    return `${fromUrl[1]}.${fromUrl[2]}`;
+  }
+
+  // Se não conseguir extrair um número, usa o título mesmo como
+  // identificação (melhor que nada no log).
+  return patch.title || "desconhecido";
+}
+
+// =====================================================
 // ENVIAR PATCH PARA O DISCORD
 // =====================================================
 
@@ -432,7 +499,7 @@ async function sendPatchToDiscord(patch) {
 
     addLog(
       "SUCCESS",
-      `Patch enviado para o canal ${channel.name}.`
+      `Patch ${extractPatchVersion(patch)} foi postado.`
     );
 
     return true;
@@ -458,16 +525,34 @@ async function checkPatch(
     const patch =
       await fetchPatchNotes();
 
+    // Só considera "novo" se já existir uma referência anterior salva.
+    // Sem isso, a primeira checagem depois de um deploy do zero (ou de
+    // qualquer falha ao carregar o config persistido) trataria o patch
+    // atual — que pode já estar no ar há dias — como recém-lançado, e
+    // postaria ele no canal por engano.
+    const hasBaseline =
+      Boolean(config.lastPatchUrl);
+
     const isNew =
+      hasBaseline &&
       patch.url !==
       config.lastPatchUrl;
 
-    addLog(
-      "INFO",
-      isNew
-        ? "Foi detectado um novo patch."
-        : "Nenhum patch novo encontrado."
-    );
+    // Só registra log quando há algo relevante a dizer: a primeira vez
+    // que uma referência é criada, ou quando um patch novo é detectado.
+    // Uma checagem que não encontrou nada novo não gera log (evita
+    // poluir o histórico com "nenhum patch novo" repetido).
+    if (!hasBaseline) {
+      addLog(
+        "INFO",
+        "Nenhuma referência anterior salva — este patch vira o ponto de partida, sem postar no canal."
+      );
+    } else if (isNew) {
+      addLog(
+        "INFO",
+        `Novo patch detectado: ${extractPatchVersion(patch)}.`
+      );
+    }
 
     let sent = false;
     let attemptedSend = false;
@@ -482,13 +567,20 @@ async function checkPatch(
         await sendPatchToDiscord(
           patch
         );
+    }
 
-      if (sent) {
-        config.lastPatchUrl =
-          patch.url;
+    // Atualiza a referência salva quando o envio deu certo, OU quando
+    // ainda não existia nenhuma referência (define o ponto de partida
+    // sem precisar enviar nada). Isso evita reenviar o mesmo link em
+    // restarts futuros.
+    if (
+      patch.url !== config.lastPatchUrl &&
+      (sent || !hasBaseline)
+    ) {
+      config.lastPatchUrl =
+        patch.url;
 
-        await saveConfig(config);
-      }
+      await saveConfig(config);
     }
 
     return {
@@ -640,6 +732,26 @@ client.once(
     restartSchedules();
 
     await registerCommands();
+
+    // Checagem "de boas-vindas": toda vez que o processo sobe (seja por
+    // um restart normal, seja por um cold start do Render acordando o
+    // serviço fora dos horários agendados), aproveita e já verifica se
+    // saiu um patch novo. Útil pra pegar um patch que saiu num horário
+    // diferente do previsto. forceSend=false garante que só envia se
+    // realmente for algo novo (sem duplicar mensagem antiga).
+    addLog(
+      "INFO",
+      "Checagem de patch ao iniciar o bot (cold start / restart)."
+    );
+
+    try {
+      await checkPatch(false);
+    } catch (error) {
+      addLog(
+        "ERROR",
+        `Erro na checagem de patch ao iniciar: ${error.message}`
+      );
+    }
   }
 );
 
@@ -972,6 +1084,8 @@ app.get(
 // =====================================================
 
 async function start() {
+  await loadLogs();
+
   config = await loadConfig();
 
   addLog(
